@@ -1,0 +1,174 @@
+name: Download best colorized He Walked by Night (1948) and publish ZIP
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/download-he-walked-by-night-colorized-zip.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: he-walked-by-night-colorized-1948
+  cancel-in-progress: false
+
+jobs:
+  compare-download-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Download both available colorized MP4 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 --max-time 5400 \
+            --user-agent "Mozilla/5.0 (compatible; personal archive packaging)" \
+            'https://archive.org/download/he-walked-by-night-1948-colorized-720p-hd/he%20walked%20by%20night-1948-colorized-720p-hd.mp4' \
+            --output 'work/restored-colorized.mp4'
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 --max-time 5400 \
+            --user-agent "Mozilla/5.0 (compatible; personal archive packaging)" \
+            'https://archive.org/download/HeWalkedByNight720p1948/HeWalkedByNight720p.mp4' \
+            --output 'work/color-720p.mp4'
+          test -s 'work/restored-colorized.mp4'
+          test -s 'work/color-720p.mp4'
+          for f in work/*.mp4; do
+            size="$(stat -c%s "$f")"
+            echo "$f bytes=$size"
+            test "$size" -lt 1900000000
+            python3 - "$f" <<'PY'
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          with p.open("rb") as f:
+              h = f.read(32)
+          assert len(h) == 32 and h[4:8] == b"ftyp", f"Not an MP4: {p}"
+          PY
+          done
+
+      - name: Compare actual video and audio quality
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          candidates = []
+          for path in (Path("work/restored-colorized.mp4"),
+                       Path("work/color-720p.mp4")):
+              p = subprocess.run(
+                  ["ffprobe", "-v", "error", "-show_streams", "-show_format",
+                   "-of", "json", str(path)],
+                  check=True, capture_output=True, text=True
+              )
+              meta = json.loads(p.stdout)
+              streams = meta.get("streams", [])
+              videos = [s for s in streams if s.get("codec_type") == "video"]
+              audios = [s for s in streams if s.get("codec_type") == "audio"]
+              assert videos and audios, f"Missing video/audio: {path}"
+              v, a = videos[0], audios[0]
+              width, height = int(v.get("width", 0)), int(v.get("height", 0))
+              duration = float(meta["format"]["duration"])
+              assert width >= 900 and height >= 500, (
+                  f"Unexpectedly low resolution in {path}: {width}x{height}"
+              )
+              assert 4500 <= duration <= 5000, (
+                  f"Unexpected film duration in {path}: {duration:.1f}s"
+              )
+              vbit = int(v.get("bit_rate") or 0)
+              abit = int(a.get("bit_rate") or 0)
+              sample = int(a.get("sample_rate") or 0)
+              size = path.stat().st_size
+              # Rank by actual picture dimensions first, then encoded video
+              # bitrate, audio sample rate/bitrate, and source size as tie-break.
+              score = (width * height, min(width, height), vbit,
+                       sample, abit, size)
+              candidates.append((score, path, width, height, v, a, duration))
+              print(
+                  f"CANDIDATE {path.name}: {width}x{height}; "
+                  f"video={v.get('codec_name')} {vbit} bit/s; "
+                  f"audio={a.get('codec_name')} {sample} Hz {abit} bit/s; "
+                  f"duration={duration:.1f}s; size={size}"
+              )
+
+          candidates.sort(key=lambda item: item[0], reverse=True)
+          _, chosen, width, height, video, audio, duration = candidates[0]
+          target = Path("work/He-Walked-by-Night-1948-Colorized.mp4")
+          target.write_bytes(chosen.read_bytes())
+          Path("work/quality-report.txt").write_text(
+              "Selected source: " + chosen.name + "\n" +
+              f"Video: {width}x{height} {video.get('codec_name')} "
+              f"{video.get('bit_rate')} bit/s\n" +
+              f"Audio: {audio.get('codec_name')} "
+              f"{audio.get('sample_rate')} Hz "
+              f"{audio.get('bit_rate')} bit/s\n" +
+              f"Duration: {duration:.1f}s\n" +
+              f"MP4 size: {target.stat().st_size} bytes\n",
+              encoding="utf-8"
+          )
+          print("SELECTED: " + chosen.name)
+          print(Path("work/quality-report.txt").read_text())
+          PY
+
+      - name: Create and verify one ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          cp work/He-Walked-by-Night-1948-Colorized.mp4 package/
+          cp work/quality-report.txt package/
+          cd package
+          zip -0 -j 'He-Walked-by-Night-1948-Colorized.zip' \
+            'He-Walked-by-Night-1948-Colorized.mp4' 'quality-report.txt'
+          unzip -tq 'He-Walked-by-Night-1948-Colorized.zip'
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          p = Path("He-Walked-by-Night-1948-Colorized.zip")
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None, "ZIP CRC verification failed"
+              names = set(z.namelist())
+              assert names == {
+                  "He-Walked-by-Night-1948-Colorized.mp4",
+                  "quality-report.txt"
+              }, names
+          print(f"ZIP verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Publish ZIP as a GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="he-walked-by-night-colorized-1948-zip"
+          asset="package/He-Walked-by-Night-1948-Colorized.zip"
+          notes=$(cat <<'NOTES'
+          He Walked by Night (1948), colorized version.
+          The workflow downloaded two Archive.org color copies, compared actual
+          resolution and video/audio stream properties, and packaged the better
+          measured source. The ZIP also includes a quality report.
+
+          Colorized sources:
+          https://archive.org/details/he-walked-by-night-1948-colorized-720p-hd
+          https://archive.org/details/HeWalkedByNight720p1948
+
+          The Archive.org item labels the restored colorized upload Public Domain Mark 1.0.
+          Copyright status can vary by jurisdiction and transfer.
+          NOTES
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$asset" --repo "$GITHUB_REPOSITORY" \
+              --title "He Walked by Night (1948) - Colorized ZIP" \
+              --notes "$notes"
+          fi
