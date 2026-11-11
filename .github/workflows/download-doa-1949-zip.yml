@@ -1,0 +1,120 @@
+name: Download D.O.A. (1949) and publish ZIP
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/download-doa-1949-zip.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doa-1949-zip
+  cancel-in-progress: false
+
+jobs:
+  download-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Download MP4 from Internet Archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 --max-time 3600 \
+            --user-agent "Mozilla/5.0 (compatible; personal archive packaging)" \
+            'https://archive.org/download/7.3-d.-o.-a.-1949/7.3%20D.O.A.%C2%A0%281949%29%C2%A0.mp4' \
+            --output 'package/DOA-1949.mp4'
+          test -s 'package/DOA-1949.mp4'
+          size="$(stat -c%s 'package/DOA-1949.mp4')"
+          echo "Downloaded MP4 bytes: $size"
+          # Keep a safety margin below GitHub Release's 2 GB per-asset limit.
+          test "$size" -lt 1900000000
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("package/DOA-1949.mp4")
+          with p.open("rb") as f:
+              header = f.read(32)
+          assert len(header) == 32 and header[4:8] == b"ftyp", (
+              f"Downloaded source does not look like MP4: {header!r}"
+          )
+          print(f"MP4 header verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Verify video, audio and film duration
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python3 - <<'PY'
+          import json, subprocess
+          movie = "package/DOA-1949.mp4"
+          result = subprocess.run(
+              ["ffprobe", "-v", "error", "-show_streams", "-show_format",
+               "-of", "json", movie],
+              check=True, capture_output=True, text=True
+          )
+          data = json.loads(result.stdout)
+          streams = data.get("streams", [])
+          video = [s for s in streams if s.get("codec_type") == "video"]
+          audio = [s for s in streams if s.get("codec_type") == "audio"]
+          assert video, "No video stream found"
+          assert audio, "No audio stream found"
+          duration = float(data["format"]["duration"])
+          assert 4_500 <= duration <= 5_700, (
+              f"Unexpected D.O.A. duration: {duration:.1f}s"
+          )
+          print(f"Video: {video[0].get('width')}x{video[0].get('height')} "
+                f"{video[0].get('codec_name')}")
+          print(f"Audio: {audio[0].get('codec_name')}")
+          print(f"Duration verified: {duration:.1f}s")
+          PY
+
+      - name: Create and verify ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd package
+          zip -0 -j 'DOA-1949.zip' 'DOA-1949.mp4'
+          unzip -tq 'DOA-1949.zip'
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          p = Path("DOA-1949.zip")
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None, "ZIP CRC verification failed"
+              assert z.namelist() == ["DOA-1949.mp4"], z.namelist()
+          print(f"ZIP verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Publish ZIP as a GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="doa-1949-zip"
+          asset="package/DOA-1949.zip"
+          notes=$(cat <<'NOTES'
+          D.O.A. (1949), packaged as one ZIP containing the MP4 film.
+
+          Source: https://archive.org/download/7.3-d.-o.-a.-1949/7.3%20D.O.A.%C2%A0%281949%29%C2%A0.mp4
+          Source page: https://publicdomainmovie.org/d-o-a-1949/
+
+          Public-domain references identify the US film as public domain; legal
+          status can differ by jurisdiction and for individual transfers.
+          NOTES
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$asset" --repo "$GITHUB_REPOSITORY" \
+              --title "D.O.A. (1949) - ZIP" \
+              --notes "$notes"
+          fi
