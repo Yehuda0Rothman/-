@@ -1,0 +1,145 @@
+name: Package best measured colorized He Walked by Night source
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/package-he-walked-by-night-colorized-single.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: he-walked-by-night-colorized-1948-single
+  cancel-in-progress: false
+
+jobs:
+  download-package-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Download the best measured colorized source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 --max-time 5400 \
+            --user-agent "Mozilla/5.0 (compatible; personal archive packaging)" \
+            'https://archive.org/download/he-walked-by-night-1948-colorized-720p-hd/he%20walked%20by%20night-1948-colorized-720p-hd.mp4' \
+            --output 'work/He-Walked-by-Night-1948-Colorized.mp4'
+          test -s 'work/He-Walked-by-Night-1948-Colorized.mp4'
+          size="$(stat -c%s 'work/He-Walked-by-Night-1948-Colorized.mp4')"
+          echo "Downloaded MP4 bytes: $size"
+          test "$size" -lt 1900000000
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("work/He-Walked-by-Night-1948-Colorized.mp4")
+          with p.open("rb") as f:
+              header = f.read(32)
+          assert len(header) == 32 and header[4:8] == b"ftyp", (
+              f"Downloaded source does not look like MP4: {header!r}"
+          )
+          print(f"MP4 header verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Verify actual video and audio properties
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          movie = "work/He-Walked-by-Night-1948-Colorized.mp4"
+          result = subprocess.run(
+              ["ffprobe", "-v", "error", "-show_streams", "-show_format",
+               "-of", "json", movie],
+              check=True, capture_output=True, text=True
+          )
+          data = json.loads(result.stdout)
+          streams = data.get("streams", [])
+          video = [s for s in streams if s.get("codec_type") == "video"]
+          audio = [s for s in streams if s.get("codec_type") == "audio"]
+          assert video and audio, "Missing video or audio stream"
+          v, a = video[0], audio[0]
+          width, height = int(v.get("width", 0)), int(v.get("height", 0))
+          duration = float(data["format"]["duration"])
+          assert width >= 800 and height >= 450, (
+              f"Unexpected source dimensions: {width}x{height}"
+          )
+          assert 4500 <= duration <= 5000, (
+              f"Unexpected film duration: {duration:.1f}s"
+          )
+          report = (
+              "He Walked by Night (1948) — colorized version\n"
+              "Internet Archive item: he-walked-by-night-1948-colorized-720p-hd\n"
+              f"Verified resolution: {width}x{height} (not true 720p)\n"
+              f"Video: {v.get('codec_name')}, {v.get('bit_rate')} bit/s\n"
+              f"Audio: {a.get('codec_name')}, {a.get('sample_rate')} Hz, "
+              f"{a.get('bit_rate')} bit/s\n"
+              f"Duration: {duration:.1f}s\n"
+              f"MP4 size: {Path(movie).stat().st_size} bytes\n"
+              "Selection: higher measured pixel dimensions than the other "
+              "colorized Internet Archive copy compared (854x480 vs 720x480).\n"
+          )
+          Path("work/quality-report.txt").write_text(report, encoding="utf-8")
+          print(report)
+          PY
+          sha256sum 'work/He-Walked-by-Night-1948-Colorized.mp4'
+
+      - name: Create and verify ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          cp work/He-Walked-by-Night-1948-Colorized.mp4 package/
+          cp work/quality-report.txt package/
+          cd package
+          zip -0 -j 'He-Walked-by-Night-1948-Colorized.zip' \
+            'He-Walked-by-Night-1948-Colorized.mp4' 'quality-report.txt'
+          unzip -tq 'He-Walked-by-Night-1948-Colorized.zip'
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          p = Path("He-Walked-by-Night-1948-Colorized.zip")
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None, "ZIP CRC verification failed"
+              assert set(z.namelist()) == {
+                  "He-Walked-by-Night-1948-Colorized.mp4",
+                  "quality-report.txt"
+              }
+          print(f"ZIP verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Publish ZIP as a GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="he-walked-by-night-colorized-1948-zip"
+          asset="package/He-Walked-by-Night-1948-Colorized.zip"
+          notes=$(cat <<'NOTES'
+          He Walked by Night (1948), colorized edition.
+
+          The workflow compared two colorized Internet Archive MP4 copies.
+          The selected file had the higher actual frame dimensions: 854x480
+          versus 720x480. The archive item's "720p" label is not its actual
+          decoded resolution. A technical quality report is included in the ZIP.
+
+          Source: https://archive.org/details/he-walked-by-night-1948-colorized-720p-hd
+          Internet Archive marks the item Public Domain Mark 1.0. Copyright
+          status can vary by jurisdiction and individual transfer.
+          NOTES
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$asset" --repo "$GITHUB_REPOSITORY" \
+              --title "He Walked by Night (1948) - Colorized ZIP" \
+              --notes "$notes"
+          fi
