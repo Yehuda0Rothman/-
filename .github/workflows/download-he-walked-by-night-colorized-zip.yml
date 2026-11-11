@@ -77,8 +77,8 @@ jobs:
               v, a = videos[0], audios[0]
               width, height = int(v.get("width", 0)), int(v.get("height", 0))
               duration = float(meta["format"]["duration"])
-              assert width >= 900 and height >= 500, (
-                  f"Unexpectedly low resolution in {path}: {width}x{height}"
+              assert width >= 640 and height >= 360, (
+                  f"Unusable video dimensions in {path}: {width}x{height}"
               )
               assert 4500 <= duration <= 5000, (
                   f"Unexpected film duration in {path}: {duration:.1f}s"
@@ -101,6 +101,9 @@ jobs:
 
           candidates.sort(key=lambda item: item[0], reverse=True)
           _, chosen, width, height, video, audio, duration = candidates[0]
+          assert width >= 900 and height >= 500, (
+              f"No suitable high-resolution colorized source found; best is {width}x{height}"
+          )
           target = Path("work/He-Walked-by-Night-1948-Colorized.mp4")
           target.write_bytes(chosen.read_bytes())
           Path("work/quality-report.txt").write_text(
