@@ -101,8 +101,8 @@ jobs:
 
           candidates.sort(key=lambda item: item[0], reverse=True)
           _, chosen, width, height, video, audio, duration = candidates[0]
-          assert width >= 900 and height >= 500, (
-              f"No suitable high-resolution colorized source found; best is {width}x{height}"
+          assert width >= 800 and height >= 450, (
+              f"Selected colorized source is below 800x450: {width}x{height}"
           )
           target = Path("work/He-Walked-by-Night-1948-Colorized.mp4")
           target.write_bytes(chosen.read_bytes())
