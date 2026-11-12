@@ -1,0 +1,144 @@
+name: Download The Vampire Bat (1933) best PAL copy and publish ZIP
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/download-vampire-bat-1933-pal-zip.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vampire-bat-1933-pal-zip
+  cancel-in-progress: false
+
+jobs:
+  download-package-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Download PAL source from Internet Archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work package
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 --max-time 5400 \
+            --user-agent "Mozilla/5.0 (compatible; personal archive packaging)" \
+            'https://archive.org/download/The_Vampire_Bat_1933/TheVampireBatPAL.mpeg4' \
+            --output 'work/The-Vampire-Bat-1933-PAL.mp4'
+          test -s 'work/The-Vampire-Bat-1933-PAL.mp4'
+          size="$(stat -c%s 'work/The-Vampire-Bat-1933-PAL.mp4')"
+          echo "Downloaded MP4 bytes: $size"
+          # Keep a safety margin below GitHub Release's 2 GB per-asset limit.
+          test "$size" -lt 1900000000
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("work/The-Vampire-Bat-1933-PAL.mp4")
+          with p.open("rb") as f:
+              header = f.read(32)
+          assert len(header) == 32 and header[4:8] == b"ftyp", (
+              f"Source does not have a valid MP4/ISO-BMFF header: {header!r}"
+          )
+          print(f"MP4 header verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Verify resolution, audio and duration
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          movie = "work/The-Vampire-Bat-1933-PAL.mp4"
+          result = subprocess.run(
+              ["ffprobe", "-v", "error", "-show_streams", "-show_format",
+               "-of", "json", movie],
+              check=True, capture_output=True, text=True
+          )
+          data = json.loads(result.stdout)
+          streams = data.get("streams", [])
+          video = [s for s in streams if s.get("codec_type") == "video"]
+          audio = [s for s in streams if s.get("codec_type") == "audio"]
+          assert video, "No video stream found"
+          assert audio, "No audio stream found"
+          v, a = video[0], audio[0]
+          width, height = int(v.get("width", 0)), int(v.get("height", 0))
+          assert width >= 700 and height >= 550, (
+              f"Unexpectedly low video resolution: {width}x{height}"
+          )
+          duration = float(data["format"]["duration"])
+          assert 3_500 <= duration <= 5_000, (
+              f"Unexpected duration for The Vampire Bat: {duration:.1f}s"
+          )
+          report = (
+              "The Vampire Bat (1933) — PAL Internet Archive copy\n"
+              f"Resolution: {width}x{height}\n"
+              f"Video codec: {v.get('codec_name')}\n"
+              f"Video bitrate: {v.get('bit_rate')} bit/s\n"
+              f"Frame rate: {v.get('avg_frame_rate')}\n"
+              f"Audio codec: {a.get('codec_name')}\n"
+              f"Audio sample rate: {a.get('sample_rate')} Hz\n"
+              f"Audio bitrate: {a.get('bit_rate')} bit/s\n"
+              f"Duration: {duration:.1f}s\n"
+              f"MP4 size: {Path(movie).stat().st_size} bytes\n"
+          )
+          Path("work/quality-report.txt").write_text(report, encoding="utf-8")
+          print(report)
+          PY
+          sha256sum 'work/The-Vampire-Bat-1933-PAL.mp4'
+
+      - name: Create and verify ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp work/The-Vampire-Bat-1933-PAL.mp4 package/
+          cp work/quality-report.txt package/
+          cd package
+          zip -0 -j 'The-Vampire-Bat-1933-PAL.zip' \
+            'The-Vampire-Bat-1933-PAL.mp4' 'quality-report.txt'
+          unzip -tq 'The-Vampire-Bat-1933-PAL.zip'
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          p = Path("The-Vampire-Bat-1933-PAL.zip")
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None, "ZIP CRC verification failed"
+              assert set(z.namelist()) == {
+                  "The-Vampire-Bat-1933-PAL.mp4",
+                  "quality-report.txt"
+              }, z.namelist()
+          print(f"ZIP verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Publish ZIP as a GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="the-vampire-bat-1933-pal-zip"
+          asset="package/The-Vampire-Bat-1933-PAL.zip"
+          notes=$(cat <<'NOTES'
+          The Vampire Bat (1933), PAL MP4 copy packaged as one ZIP.
+          The ZIP includes a technical report generated by ffprobe.
+
+          Source: https://archive.org/download/The_Vampire_Bat_1933/TheVampireBatPAL.mpeg4
+          Archive item: https://archive.org/details/The_Vampire_Bat_1933
+
+          This package preserves the downloaded source without re-encoding.
+          NOTES
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$asset" --repo "$GITHUB_REPOSITORY" \
+              --title "The Vampire Bat (1933) - PAL ZIP" \
+              --notes "$notes"
+          fi
