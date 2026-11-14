@@ -1,0 +1,149 @@
+name: Download Mysterious Intruder (1946) highest-quality MP4 and publish ZIP
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/download-mysterious-intruder-1946-zip.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mysterious-intruder-1946-zip
+  cancel-in-progress: false
+
+jobs:
+  download-verify-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Download the listed 1080p Blu-ray MP4 from Internet Archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work package
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 --max-time 5400 \
+            --user-agent "Mozilla/5.0 (compatible; personal archive packaging)" \
+            'https://archive.org/download/mysterious-intruder-1946/Mysterious%20Intruder%201946.mp4' \
+            --output 'work/Mysterious-Intruder-1946.mp4'
+          test -s 'work/Mysterious-Intruder-1946.mp4'
+          size="$(stat -c%s 'work/Mysterious-Intruder-1946.mp4')"
+          echo "Downloaded MP4 bytes: $size"
+          # Keep a safety margin below GitHub Release's 2 GB per-asset limit.
+          test "$size" -lt 1900000000
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("work/Mysterious-Intruder-1946.mp4")
+          with p.open("rb") as f:
+              header = f.read(32)
+          assert len(header) == 32 and header[4:8] == b"ftyp", (
+              f"Source does not have a valid MP4/ISO-BMFF header: {header!r}"
+          )
+          print(f"MP4 header verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Verify true video resolution, audio and duration
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          movie = "work/Mysterious-Intruder-1946.mp4"
+          result = subprocess.run(
+              ["ffprobe", "-v", "error", "-show_streams", "-show_format",
+               "-of", "json", movie],
+              check=True, capture_output=True, text=True
+          )
+          data = json.loads(result.stdout)
+          streams = data.get("streams", [])
+          video = [s for s in streams if s.get("codec_type") == "video"]
+          audio = [s for s in streams if s.get("codec_type") == "audio"]
+          assert video, "No video stream found"
+          assert audio, "No audio stream found"
+          v, a = video[0], audio[0]
+          width, height = int(v.get("width", 0)), int(v.get("height", 0))
+          duration = float(data["format"]["duration"])
+          assert width >= 1280 and height >= 720, (
+              f"Actual resolution is below HD: {width}x{height}"
+          )
+          assert 3_300 <= duration <= 4_500, (
+              f"Unexpected Mysterious Intruder duration: {duration:.1f}s"
+          )
+          report = (
+              "Mysterious Intruder (1946)\n"
+              "Internet Archive item: mysterious-intruder-1946\n"
+              "Archive filename: Mysterious Intruder 1946.mp4\n"
+              f"Verified resolution: {width}x{height}\n"
+              f"Video codec: {v.get('codec_name')}\n"
+              f"Video bitrate: {v.get('bit_rate')} bit/s\n"
+              f"Frame rate: {v.get('avg_frame_rate')}\n"
+              f"Audio codec: {a.get('codec_name')}\n"
+              f"Audio sample rate: {a.get('sample_rate')} Hz\n"
+              f"Audio bitrate: {a.get('bit_rate')} bit/s\n"
+              f"Duration: {duration:.1f}s\n"
+              f"MP4 size: {Path(movie).stat().st_size} bytes\n"
+          )
+          Path("work/quality-report.txt").write_text(report, encoding="utf-8")
+          print(report)
+          PY
+          sha256sum 'work/Mysterious-Intruder-1946.mp4'
+
+      - name: Create and verify ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp work/Mysterious-Intruder-1946.mp4 package/
+          cp work/quality-report.txt package/
+          cd package
+          zip -0 -j 'Mysterious-Intruder-1946.zip' \
+            'Mysterious-Intruder-1946.mp4' 'quality-report.txt'
+          unzip -tq 'Mysterious-Intruder-1946.zip'
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          p = Path("Mysterious-Intruder-1946.zip")
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None, "ZIP CRC verification failed"
+              assert set(z.namelist()) == {
+                  "Mysterious-Intruder-1946.mp4",
+                  "quality-report.txt"
+              }, z.namelist()
+          print(f"ZIP verified: {p.stat().st_size} bytes")
+          PY
+
+      - name: Publish ZIP as a GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="mysterious-intruder-1946-zip"
+          asset="package/Mysterious-Intruder-1946.zip"
+          notes=$(cat <<'NOTES'
+          Mysterious Intruder (1946), downloaded as the Internet Archive-listed
+          1080p Blu-ray MP4. The ZIP includes a technical quality report.
+          The workflow verifies actual dimensions and streams before publishing.
+
+          Source item: https://archive.org/details/mysterious-intruder-1946
+          Direct source: https://archive.org/download/mysterious-intruder-1946/Mysterious%20Intruder%201946.mp4
+
+          Internet Archive marks the item Public Domain Mark 1.0. A catalog entry
+          records a 1946 copyright registration; the renewal/legal status has not
+          been independently confirmed here, and status can vary by jurisdiction.
+          NOTES
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$asset" --repo "$GITHUB_REPOSITORY" \
+              --title "Mysterious Intruder (1946) - ZIP" \
+              --notes "$notes"
+          fi
