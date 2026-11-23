@@ -1,0 +1,1720 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#151b28">
+<title>שחמט — משחק נגד המחשב ואונליין</title>
+<style>
+:root{color-scheme:dark;--panel:#1b2635;--line:#34465d;--text:#edf3fb;--muted:#aab9ca;--gold:#e6bd72;--light:#e9d6b4;--dark:#8a674b}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#243348 0,#111722 55%);color:var(--text);font-family:Arial,"Noto Sans Hebrew",sans-serif;min-height:100vh}
+main{max-width:1100px;margin:0 auto;padding:24px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+h1{font-size:clamp(25px,4vw,38px);margin:0;color:var(--gold)}
+.subtitle{color:var(--muted);margin-top:6px}
+.layout{display:grid;grid-template-columns:minmax(280px,640px) minmax(240px,1fr);gap:20px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 18px 50px #0004}
+#board{width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);direction:ltr;border:5px solid #443629;border-radius:9px;overflow:hidden;box-shadow:0 12px 30px #0005}
+.square{position:relative;border:0;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;min-width:0;min-height:0}
+.square.light{background:var(--light)}.square.dark{background:var(--dark)}
+.square.selected{box-shadow:inset 0 0 0 5px #f2c14e}
+.square.last-move{background-image:linear-gradient(#f5d35d66,#f5d35d66)}
+.square.legal-target:after{content:"";position:absolute;width:23%;height:23%;border-radius:50%;background:#263a4c70}
+.square.capture-target:after{content:"";position:absolute;inset:4px;border:5px solid #d84f4f9c;border-radius:50%}
+.piece{font-size:clamp(25px,6.3vw,65px);line-height:1;z-index:1;user-select:none;text-shadow:0 2px 2px #0005}
+.white-piece{color:#fff9e9;text-shadow:0 2px 3px #2e2419,0 0 2px #30251a}
+.black-piece{color:#202630;text-shadow:0 1px 1px #fff5}
+.coordinate{position:absolute;font-size:clamp(9px,1.4vw,13px);font-weight:bold;z-index:2;pointer-events:none}
+.file-coordinate{right:4px;bottom:2px}.rank-coordinate{left:4px;top:2px}
+.light .coordinate{color:#795b40}.dark .coordinate{color:#f3dfc4}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+button.action{border:1px solid var(--line);border-radius:10px;padding:10px 13px;background:#29394c;color:var(--text);font-weight:bold;cursor:pointer}
+button.action.primary{background:var(--gold);color:#20202a;border-color:var(--gold)}
+button.action:disabled{opacity:.45;cursor:not-allowed}
+.status{padding:12px;border:1px solid var(--line);border-radius:11px;background:#141e2b;margin-bottom:14px;min-height:45px;line-height:1.5}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.stat{background:#141e2b;border:1px solid var(--line);border-radius:10px;padding:9px;text-align:center}
+.stat strong{display:block;color:var(--gold);font-size:18px;margin-top:4px}
+.stat span{color:var(--muted);font-size:12px}
+.setting{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0}
+input{width:115px;border:1px solid var(--line);border-radius:8px;background:#121b27;color:var(--text);padding:9px;font-size:16px}
+.moves{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#141e2b;padding:8px}
+.move-row{display:grid;grid-template-columns:35px 1fr 1fr;padding:6px 4px;border-bottom:1px solid #293849;direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
+.move-number{color:var(--muted)}
+details{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;color:var(--muted);line-height:1.65}
+summary{color:var(--gold);cursor:pointer;font-weight:bold}
+.foot{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}
+.online-info{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#141e2b;line-height:1.5}.online-info input{width:min(100%,340px);direction:ltr;text-align:left}.online-tools input{max-width:130px}.online-info[hidden]{display:none}
+@media(max-width:800px){main{padding:12px}.layout{grid-template-columns:1fr}.panel{padding:12px}.piece{font-size:clamp(25px,9vw,58px)}header{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div><h1>שחמט V31</h1><div class="subtitle">מנוע 0x88 עם LMP ו־Ponder</div></div>
+<div id="modeLabel" class="subtitle">אתה משחק בלבן · המחשב בשחור</div>
+</header>
+<div class="layout">
+<section class="panel">
+<div id="board" role="grid" aria-label="לוח שחמט"></div>
+<div class="controls">
+<button id="newGame" class="action primary">משחק חדש</button>
+<button id="undo" class="action" disabled>בטל תור</button>
+<button id="flip" class="action">הפוך לוח</button>
+<button id="resign" class="action">כניעה</button>
+</div>
+<div class="online-tools">
+<div class="controls">
+<button id="createRoom" class="action primary">צור חדר אונליין</button>
+<input id="roomCode" type="text" maxlength="6" placeholder="קוד חדר" aria-label="קוד חדר">
+<button id="joinRoom" class="action">הצטרף לחדר</button>
+</div>
+<div id="onlineInfo" class="online-info" hidden>
+<span id="onlineInfoText"></span>
+<div class="controls"><input id="inviteLink" type="text" readonly aria-label="קישור הזמנה"><button id="copyInvite" class="action">העתק קישור</button></div>
+</div>
+</div>
+</section>
+<aside class="panel">
+<div id="status" class="status" aria-live="polite">טוען מנוע…</div>
+<div class="setting"><label for="thinkTime">זמן חשיבה לתור (ms)</label><input id="thinkTime" type="number" min="1" max="120000" step="50" value="700"></div>
+<div class="stats">
+<div class="stat"><span>עומק</span><strong id="depth">—</strong></div>
+<div class="stat"><span>צמתים</span><strong id="nodes">—</strong></div>
+<div class="stat"><span>זמן</span><strong id="elapsed">—</strong></div>
+</div>
+<h3>מהלכים</h3>
+<div id="moves" class="moves" aria-label="היסטוריית מהלכים"></div>
+<details>
+<summary>הסבר על המנוע והקוד</summary>
+<p><b>ייצוג 0x88:</b> הלוח נשמר במערך של 128 תאים. שמונה תאים בכל שורה הם משבצות אמיתיות, ושאר התאים מאפשרים לזהות יציאה מהלוח באמצעות בדיקת ביט אחת.</p>
+<p><b>חיפוש Negamax ו־Alpha-Beta:</b> המנוע מחפש מהלכים קדימה. Alpha ו־Beta הם גבולות שמאפשרים לעצור חיפוש בענפים שלא יכולים לשנות את הבחירה.</p>
+<p><b>טבלת טרנספוזיציה:</b> שומרת תוצאות של מצבים שכבר נותחו, כדי לא לחשב אותם מחדש.</p>
+<p><b>סידור מהלכים:</b> מהלך מטבלת המצבים, לכידות, קידומים, מהלכי Killer והיסטוריית מהלכים מקבלים עדיפות לחיפוש מוקדם.</p>
+<p><b>LMR:</b> מהלכים שקטים שמופיעים מאוחר נבדקים תחילה בעומק מופחת; אם הם נראים מבטיחים, החיפוש חוזר לעומק מלא.</p>
+<p><b>LMP:</b> בעומקים נמוכים ניתן לדלג על חלק מהמהלכים השקטים המאוחרים, רק בצמתי חיפוש מוגבלים ורק אם לא נמצא שיפור עד כה. לכידות, קידומים ומהלכים שנותנים שח אינם מדולגים.</p>
+<p><b>Quiescence:</b> כשהעומק הרגיל נגמר, המנוע ממשיך לבדוק רצפי לכידות וקידומים כדי שלא להעריך עמדה באמצע רצף טקטי.</p>
+<p><b>Worker:</b> החיפוש מתבצע בתהליך רקע נפרד, כך שממשק המשחק נשאר מגיב גם בזמן חשיבה.</p>
+<p><b>Ponder:</b> בזמן תור האדם המחשב מכין תגובות אפשריות, ושומר לכל תגובה מנוע קטן עם מטמון מוגבל. אם נבחר מהלך שכבר הוכן, החיפוש ממשיך מאותו עומק.</p>
+</details>
+<div class="foot">הגרסה הניסיונית אינה מחליפה את הגרסה הראשית. מנוע החיפוש יכול לטעות; בדיקות הניסוי אינן הבטחה לניצחון מול מנועים אחרים.</div>
+</aside>
+</div>
+</main>
+<script id="engine-source">
+"use strict";
+// ================================================================
+// מנגנון הלוח של V30 – ייצוג 0x88
+// ================================================================
+// הלוח נשמר במערך בן 128 תאים. כל שורה תופסת 16 תאים, אבל רק 8 מהם
+// הם משבצות אמיתיות. בדיקה (square & 0x88) מזהה יציאה מגבולות הלוח.
+// מספר משבצת מחושב כך: שורה * 16 + טור.
+//
+// קידוד הכלים: 0 = ריק; 1–6 = כלים לבנים; 7–12 = כלים שחורים.
+// turn: 0 = לבן, 1 = שחור. מספרי הכלים מאפשרים לחשב צבע וסוג במהירות.
+//
+// הקובץ אחראי על מצב הלוח, יצירת מהלכים, ביצוע/ביטול מהלכים ו-hash.
+// הוא אינו מחליט איזה מהלך טוב – זו אחריות קובץ מנוע החיפוש.
+
+
+// עמדת הפתיחה מוגדרת פעם אחת ומשותפת לממשק ולמנוע.
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+// קבועי סוגי הכלים וביטי זכויות ההצרחה. Object.freeze מונע שינוי שלהם.
+const X88 = Object.freeze({
+  EMPTY: 0, PAWN: 1, KNIGHT: 2, BISHOP: 3, ROOK: 4, QUEEN: 5, KING: 6,
+  CASTLE_WHITE_KING: 1, CASTLE_WHITE_QUEEN: 2,
+  CASTLE_BLACK_KING: 4, CASTLE_BLACK_QUEEN: 8
+});
+// מרחקי קפיצה בייצוג 0x88: פרש, מלך, רץ וצריח.
+const KNIGHT_STEPS = [-33, -31, -18, -14, 14, 18, 31, 33];
+const KING_STEPS = [-17, -16, -15, -1, 1, 15, 16, 17];
+const BISHOP_STEPS = [-17, -15, 15, 17];
+const ROOK_STEPS = [-16, -1, 1, 16];
+const QUEEN_STEPS = [...BISHOP_STEPS, ...ROOK_STEPS];
+// קידום רגלי: סדר הקידומים בקידוד המהלך הוא מלכה, צריח, רץ, פרש.
+const PROMOTION_TYPE = [0, X88.QUEEN, X88.ROOK, X88.BISHOP, X88.KNIGHT];
+// קוד הכלי הפנימי לפי האינדקס; indexOf משמש גם לטעינת אותיות FEN.
+const PIECE_CHAR = ["", "P", "N", "B", "R", "Q", "K", "p", "n", "b", "r", "q", "k"];
+
+// טבלת Zobrist: מספרים פסאודו-אקראיים שמאפשרים לחשב hash למצב לוח.
+ // שינוי בכלי, תור, זכויות הצרחה או en-passant מעדכן את המפתח.
+const ZOBRIST = (() => {
+  let seed = 0x6d2b79f5;
+  const next = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return seed >>> 0;
+  };
+  const pieces = new Uint32Array(128 * 13);
+  for (let square = 0; square < 128; square += 1) {
+    if (square & 0x88) continue;
+    for (let piece = 1; piece <= 12; piece += 1) pieces[square * 13 + piece] = next();
+  }
+  const castling = Uint32Array.from({ length: 16 }, next);
+  const enPassant = Uint32Array.from({ length: 129 }, next);
+  const halfmove = Uint32Array.from({ length: 101 }, next);
+  return { pieces, castling, enPassant, halfmove, side: next() };
+})();
+
+// פונקציות קטנות לפענוח קידוד כלי/מהלך ולבדיקה אם תא הוא חלק מהלוח.
+function sideOf(piece) { return piece > 6 ? 1 : 0; }
+function typeOf(piece) { return piece ? ((piece - 1) % 6) + 1 : 0; }
+function isBoardSquare(square) { return (square & 0x88) === 0; }
+// מהלך נשמר כמספר אחד: 7 ביטים למקור, 7 ליעד ו-3 לקידום.
+function moveFrom(move) { return move & 0x7f; }
+function moveTo(move) { return (move >>> 7) & 0x7f; }
+function movePromotion(move) { return (move >>> 14) & 7; }
+function encodeMove(from, to, promotion = 0) { return from | (to << 7) | (promotion << 14); }
+
+// מחלקת מצב הלוח. כל הנתונים הדרושים לשחזור מצב משחק נשמרים כאן.
+class ChessPositionX88 {
+  // מקבל מחרוזת FEN, או פותח את המשחק מעמדת ההתחלה אם לא נמסרה עמדה.
+  constructor(fen = START_FEN) {
+    // לוח 0x88: כל תא מכיל קוד כלי, ו-0 מסמן משבצת ריקה.
+    this.squares = new Uint8Array(128);
+    // מצב תור וזכויות: מי משחק, הצרחות, en-passant ושעוני המשחק.
+    this.turn = 0;
+    this.castling = 15;
+    this.epSquare = -1;
+    this.halfmoveClock = 0;
+    this.fullmoveNumber = 1;
+    // מיקום המלכים נשמר בנפרד כדי לבדוק שח בלי לחפש אותם בכל הלוח.
+    this.kingSquare = new Int16Array([116, 4]);
+    this.ply = 0;
+    // מחסנית אחת מספיקה: מהלך רגיל או Null משתמשים ברמת ply נפרדת.
+    this.undoStack = Array.from({ length: 128 }, () => ({}));
+    this.loadFEN(fen);
+  }
+
+  // טוען עמדה מתקן FEN: פריסת כלים, תור, הצרחות, en-passant ושעונים.
+  // בסוף מחשב hash מלא כדי לוודא שמצב הזיכרון מתחיל עקבי.
+  loadFEN(fen) {
+    const fields = String(fen).trim().split(/\s+/);
+    if (fields.length < 4) throw new Error("Invalid FEN");
+    this.squares.fill(0);
+    const ranks = fields[0].split("/");
+    if (ranks.length !== 8) throw new Error("Invalid FEN board");
+    this.kingSquare[0] = -1;
+    this.kingSquare[1] = -1;
+    for (let row = 0; row < 8; row += 1) {
+      let file = 0;
+      for (const char of ranks[row]) {
+        if (char >= "1" && char <= "8") {
+          file += Number(char);
+          continue;
+        }
+        const piece = PIECE_CHAR.indexOf(char);
+        if (piece <= 0 || file > 7) throw new Error("Invalid FEN piece placement");
+        const square = row * 16 + file;
+        this.squares[square] = piece;
+        if (typeOf(piece) === X88.KING) this.kingSquare[sideOf(piece)] = square;
+        file += 1;
+      }
+      if (file !== 8) throw new Error("Invalid FEN rank width");
+    }
+    if (this.kingSquare[0] < 0 || this.kingSquare[1] < 0) throw new Error("FEN must contain both kings");
+    this.turn = fields[1] === "w" ? 0 : fields[1] === "b" ? 1 : -1;
+    if (this.turn < 0) throw new Error("Invalid FEN side to move");
+    this.castling = 0;
+    if (fields[2] !== "-") {
+      if (fields[2].includes("K")) this.castling |= 1;
+      if (fields[2].includes("Q")) this.castling |= 2;
+      if (fields[2].includes("k")) this.castling |= 4;
+      if (fields[2].includes("q")) this.castling |= 8;
+    }
+    this.epSquare = -1;
+    if (fields[3] !== "-") {
+      const file = fields[3].charCodeAt(0) - 97;
+      const rank = 8 - Number(fields[3][1]);
+      if (file < 0 || file > 7 || rank < 0 || rank > 7) throw new Error("Invalid FEN en-passant square");
+      this.epSquare = rank * 16 + file;
+    }
+    this.halfmoveClock = Math.max(0, Number(fields[4] || 0) | 0);
+    this.fullmoveNumber = Math.max(1, Number(fields[5] || 1) | 0);
+    this.hash = this.computeHash();
+    return this;
+  }
+
+  // ממיר את מצב הלוח הנוכחי חזרה למחרוזת FEN, לצורך שמירה ובדיקות.
+  toFEN() {
+    const ranks = [];
+    for (let row = 0; row < 8; row += 1) {
+      let line = "", empty = 0;
+      for (let file = 0; file < 8; file += 1) {
+        const piece = this.squares[row * 16 + file];
+        if (!piece) empty += 1;
+        else {
+          if (empty) line += empty;
+          empty = 0;
+          line += PIECE_CHAR[piece];
+        }
+      }
+      if (empty) line += empty;
+      ranks.push(line);
+    }
+    let rights = "";
+    if (this.castling & 1) rights += "K";
+    if (this.castling & 2) rights += "Q";
+    if (this.castling & 4) rights += "k";
+    if (this.castling & 8) rights += "q";
+    const ep = this.epSquare < 0 ? "-" : String.fromCharCode(97 + (this.epSquare & 7)) + (8 - (this.epSquare >> 4));
+    return ranks.join("/") + " " + (this.turn ? "b" : "w") + " " + (rights || "-") + " " + ep + " " + this.halfmoveClock + " " + this.fullmoveNumber;
+  }
+
+  // מחשב hash מלא מהתחלה: XOR של כל הכלים ושל נתוני המצב.
+  // החישוב משמש לאתחול ולבדיקות מול העדכון המהיר שב-makeMove.
+  computeHash() {
+    let hash = ZOBRIST.castling[this.castling] ^ ZOBRIST.enPassant[this.epSquare + 1]
+      ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)];
+    if (this.turn) hash ^= ZOBRIST.side;
+    for (let square = 0; square < 128; square += 1) {
+      if (square & 0x88) { square += 7; continue; }
+      const piece = this.squares[square];
+      if (piece) hash ^= ZOBRIST.pieces[square * 13 + piece];
+    }
+    return hash >>> 0;
+  }
+
+  // מפתח לזיהוי חזרות. מסיר את רכיב שעון 50 המהלכים מה-hash,
+  // כדי שאותה עמדה תזוהה גם כשהמונה התקדם.
+  repetitionKey() {
+    return (this.hash ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)]) >>> 0;
+  }
+
+  // בודק אם משבצת מותקפת על ידי צד מסוים: רגלים, פרשים, מלכים,
+  // ואז קרני תנועה של רצים/צריחים/מלכות עד הכלי הראשון בכל כיוון.
+  isSquareAttacked(square, bySide) {
+    const board = this.squares;
+    const pawn = bySide === 0 ? 1 : 7;
+    if (bySide === 0) {
+      if (board[square + 15] === pawn || board[square + 17] === pawn) return true;
+    } else if (board[square - 15] === pawn || board[square - 17] === pawn) return true;
+    const knight = bySide === 0 ? 2 : 8;
+    for (const step of KNIGHT_STEPS) {
+      const from = square + step;
+      if (isBoardSquare(from) && board[from] === knight) return true;
+    }
+    const king = bySide === 0 ? 6 : 12;
+    for (const step of KING_STEPS) {
+      const from = square + step;
+      if (isBoardSquare(from) && board[from] === king) return true;
+    }
+    const bishop = bySide === 0 ? 3 : 9;
+    const rook = bySide === 0 ? 4 : 10;
+    const queen = bySide === 0 ? 5 : 11;
+    for (const step of BISHOP_STEPS) {
+      for (let from = square + step; isBoardSquare(from); from += step) {
+        const piece = board[from];
+        if (!piece) continue;
+        if (piece === bishop || piece === queen) return true;
+        break;
+      }
+    }
+    for (const step of ROOK_STEPS) {
+      for (let from = square + step; isBoardSquare(from); from += step) {
+        const piece = board[from];
+        if (!piece) continue;
+        if (piece === rook || piece === queen) return true;
+        break;
+      }
+    }
+    return false;
+  }
+
+  // בודק אם המלך של side מותקף על ידי היריב.
+  isInCheck(side = this.turn) {
+    return this.isSquareAttacked(this.kingSquare[side], side ^ 1);
+  }
+
+  // מוסיף מהלך רגלי. בשורה האחרונה יוצר ארבע אפשרויות קידום.
+  addPawnMove(moves, from, to, promotionRank) {
+    if ((to >> 4) === promotionRank) {
+      for (let promotion = 1; promotion <= 4; promotion += 1) moves.push(encodeMove(from, to, promotion));
+    } else moves.push(encodeMove(from, to));
+  }
+
+  // יוצר מהלכים אפשריים לפי תנועת הכלים, בלי לבדוק עדיין אם המלך
+  // נשאר בטוח. generateLegalMoves מבצע את בדיקת החוקיות הסופית.
+  // capturesOnly=true מבקש רק לכידות וקידומים לצורך Quiescence.
+  generatePseudoMoves(capturesOnly = false) {
+    const moves = [];
+    const board = this.squares;
+    // side הוא הצד הנוכחי; enemy הוא היריב; כיוון הרגלי תלוי בצבע.
+    const side = this.turn;
+    const enemy = side ^ 1;
+    const pawn = side === 0 ? 1 : 7;
+    const pawnDirection = side === 0 ? -16 : 16;
+    const startRank = side === 0 ? 6 : 1;
+    const promotionRank = side === 0 ? 0 : 7;
+
+    for (let from = 0; from < 128; from += 1) {
+      if (from & 0x88) { from += 7; continue; }
+      const piece = board[from];
+      if (!piece || sideOf(piece) !== side) continue;
+      const type = typeOf(piece);
+
+      if (type === X88.PAWN) {
+        const one = from + pawnDirection;
+        if (isBoardSquare(one) && !board[one]) {
+          if (!capturesOnly || (one >> 4) === promotionRank) {
+            this.addPawnMove(moves, from, one, promotionRank);
+          }
+          const two = from + pawnDirection * 2;
+          if (!capturesOnly && (from >> 4) === startRank && !board[two]) {
+            moves.push(encodeMove(from, two));
+          }
+        }
+        // שתי אלכסוניות הלכידה מטופלות באותה לולאה, כולל En Passant.
+        for (let offset = -1; offset <= 1; offset += 2) {
+          const to = from + pawnDirection + offset;
+          if (!isBoardSquare(to)) continue;
+          const target = board[to];
+          if ((target && sideOf(target) === enemy) || to === this.epSquare) {
+            this.addPawnMove(moves, from, to, promotionRank);
+          }
+        }
+        continue;
+      }
+
+      const steps = type === X88.KNIGHT ? KNIGHT_STEPS : type === X88.BISHOP ? BISHOP_STEPS
+        : type === X88.ROOK ? ROOK_STEPS : KING_STEPS;
+      if (type === X88.BISHOP || type === X88.ROOK || type === X88.QUEEN) {
+        const directions = type === X88.QUEEN ? QUEEN_STEPS : steps;
+        for (const step of directions) {
+          for (let to = from + step; isBoardSquare(to); to += step) {
+            const target = board[to];
+            if (!target) { if (!capturesOnly) moves.push(encodeMove(from, to)); }
+            else {
+              if (sideOf(target) === enemy) moves.push(encodeMove(from, to));
+              break;
+            }
+          }
+        }
+        continue;
+      }
+
+      for (const step of steps) {
+        const to = from + step;
+        if (!isBoardSquare(to)) continue;
+        const target = board[to];
+        if (!target) { if (!capturesOnly) moves.push(encodeMove(from, to)); }
+        else if (sideOf(target) === enemy) moves.push(encodeMove(from, to));
+      }
+
+      if (type === X88.KING && !capturesOnly && !this.isInCheck(side)) {
+        const shortRight = side === 0 ? 1 : 4;
+        const longRight = side === 0 ? 2 : 8;
+        const home = side === 0 ? 116 : 4;
+        const enemySide = side ^ 1;
+        if ((this.castling & shortRight) && board[home + 3] === (side === 0 ? 4 : 10)
+          && !board[home + 1] && !board[home + 2]
+          && !this.isSquareAttacked(home + 1, enemySide) && !this.isSquareAttacked(home + 2, enemySide)) {
+          moves.push(encodeMove(home, home + 2));
+        }
+        if ((this.castling & longRight) && board[home - 4] === (side === 0 ? 4 : 10)
+          && !board[home - 1] && !board[home - 2] && !board[home - 3]
+          && !this.isSquareAttacked(home - 1, enemySide) && !this.isSquareAttacked(home - 2, enemySide)) {
+          moves.push(encodeMove(home, home - 2));
+        }
+      }
+    }
+    return moves;
+  }
+
+  // מבצע מהלך חוקי ומחזיר אובייקט undo שאיתו אפשר לשחזר את העמדה.
+  // תוך כדי הפעולה מעדכן גם שעונים, זכויות הצרחה, kingSquare ו-hash.
+  makeMove(move) {
+    const from = moveFrom(move), to = moveTo(move), promotion = movePromotion(move);
+    const moving = this.squares[from], side = this.turn;
+    const direction = side === 0 ? -16 : 16;
+    const isPawn = typeOf(moving) === X88.PAWN;
+    const isCastle = typeOf(moving) === X88.KING && Math.abs(to - from) === 2;
+    // ב-En Passant הרגלי נלכד במשבצת שמאחורי יעד המהלך.
+    const isEnPassant = isPawn && to === this.epSquare && !this.squares[to];
+    const capturedSquare = isEnPassant ? to - direction : to;
+    const captured = this.squares[capturedSquare];
+    // שומרים את כל המידע שמשתנה, כדי ש-unmakeMove יחזיר בדיוק את המצב הקודם.
+    const undo = this.undoStack[this.ply];
+    undo.from = from;
+    undo.to = to;
+    undo.moving = moving;
+    undo.captured = captured;
+    undo.capturedSquare = capturedSquare;
+    undo.turn = side;
+    undo.isNull = false;
+    undo.castling = this.castling;
+    undo.epSquare = this.epSquare;
+    undo.halfmoveClock = this.halfmoveClock;
+    undo.fullmoveNumber = this.fullmoveNumber;
+    undo.whiteKing = this.kingSquare[0];
+    undo.blackKing = this.kingSquare[1];
+    undo.rookFrom = -1;
+    undo.rookTo = -1;
+    undo.rook = 0;
+    undo.hash = this.hash;
+
+    // מתחילים מ-hash הישן ומסירים ממנו את רכיבי המצב שישתנו.
+    // בסוף יתווספו רכיבי המצב החדש; כך אין צורך לחשב hash מחדש מהלוח.
+    let hash = this.hash
+      ^ ZOBRIST.castling[this.castling]
+      ^ ZOBRIST.enPassant[this.epSquare + 1]
+      ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)]
+      ^ ZOBRIST.pieces[from * 13 + moving];
+
+    this.squares[from] = 0;
+    if (captured) {
+      hash ^= ZOBRIST.pieces[capturedSquare * 13 + captured];
+      this.squares[capturedSquare] = 0;
+    }
+    if (isCastle) {
+      undo.rookFrom = to > from ? from + 3 : from - 4;
+      undo.rookTo = to > from ? from + 1 : from - 1;
+      undo.rook = this.squares[undo.rookFrom];
+      hash ^= ZOBRIST.pieces[undo.rookFrom * 13 + undo.rook]
+        ^ ZOBRIST.pieces[undo.rookTo * 13 + undo.rook];
+      this.squares[undo.rookFrom] = 0;
+      this.squares[undo.rookTo] = undo.rook;
+    }
+    // אם הרגלי קודם, מציבים את הכלי החדש; אחרת מציבים את הכלי המקורי.
+    const placed = promotion ? (side === 0 ? PROMOTION_TYPE[promotion] : PROMOTION_TYPE[promotion] + 6) : moving;
+    this.squares[to] = placed;
+    hash ^= ZOBRIST.pieces[to * 13 + placed];
+    if (typeOf(moving) === X88.KING) {
+      this.kingSquare[side] = to;
+      this.castling &= side === 0 ? 12 : 3;
+    }
+    if (from === 116 || to === 116) this.castling &= ~3;
+    if (from === 4 || to === 4) this.castling &= ~12;
+    if (from === 112 || to === 112) this.castling &= ~2;
+    if (from === 119 || to === 119) this.castling &= ~1;
+    if (from === 0 || to === 0) this.castling &= ~8;
+    if (from === 7 || to === 7) this.castling &= ~4;
+    this.epSquare = isPawn && Math.abs(to - from) === 32 ? from + direction : -1;
+    this.halfmoveClock = isPawn || captured ? 0 : this.halfmoveClock + 1;
+    if (side === 1) this.fullmoveNumber += 1;
+    this.turn ^= 1;
+    hash ^= ZOBRIST.side
+      ^ ZOBRIST.castling[this.castling]
+      ^ ZOBRIST.enPassant[this.epSquare + 1]
+      ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)];
+    this.hash = hash >>> 0;
+    this.ply += 1;
+    return undo;
+  }
+
+  // מבטל מהלך רגיל או Null ומשחזר את המצב. שדות הכלים משתנים רק במהלך רגיל.
+  unmakeMove(undo) {
+    this.ply -= 1;
+    this.hash = undo.hash;
+    this.turn = undo.turn;
+    this.epSquare = undo.epSquare;
+    this.halfmoveClock = undo.halfmoveClock;
+    this.fullmoveNumber = undo.fullmoveNumber;
+    if (undo.isNull) return;
+    this.castling = undo.castling;
+    this.kingSquare[0] = undo.whiteKing;
+    this.kingSquare[1] = undo.blackKing;
+    this.squares[undo.from] = undo.moving;
+    this.squares[undo.to] = 0;
+    if (undo.captured) this.squares[undo.capturedSquare] = undo.captured;
+    if (undo.rookFrom >= 0) {
+      this.squares[undo.rookFrom] = undo.rook;
+      this.squares[undo.rookTo] = 0;
+    }
+  }
+
+  // מבצע "ויתור על תור" לצורך Null Move Pruning בחיפוש בלבד.
+  makeNullMove() {
+    const undo = this.undoStack[this.ply];
+    undo.isNull = true;
+    undo.turn = this.turn;
+    undo.epSquare = this.epSquare;
+    undo.halfmoveClock = this.halfmoveClock;
+    undo.fullmoveNumber = this.fullmoveNumber;
+    undo.hash = this.hash;
+
+    let hash = this.hash
+      ^ ZOBRIST.enPassant[this.epSquare + 1]
+      ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)]
+      ^ ZOBRIST.side;
+    this.epSquare = -1;
+    this.halfmoveClock += 1;
+    if (this.turn === 1) this.fullmoveNumber += 1;
+    this.turn ^= 1;
+    hash ^= ZOBRIST.enPassant[0]
+      ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)];
+    this.hash = hash >>> 0;
+    this.ply += 1;
+    return undo;
+  }
+
+  // מסנן את המהלכים המדומים: מבצע כל מהלך זמנית, בודק שהמלך
+  // של הצד הנוכחי אינו בשח, מבטל את המהלך ושומר רק מהלכים חוקיים.
+  generateLegalMoves(capturesOnly = false) {
+    const pseudo = this.generatePseudoMoves(capturesOnly);
+    const legal = [];
+    const side = this.turn;
+    for (const move of pseudo) {
+      const undo = this.makeMove(move);
+      const safe = !this.isInCheck(side);
+      this.unmakeMove(undo);
+      if (safe) legal.push(move);
+    }
+    return legal;
+  }
+
+  // Perft סופר כמה צמתים/עמדות מתקבלים אחרי depth חצאי-מהלכים.
+  // זו בדיקת תקינות ליצירת מהלכים, לא מדד לחוזק המנוע.
+  perft(depth) {
+    if (depth === 0) return 1;
+    let nodes = 0;
+    for (const move of this.generateLegalMoves()) {
+      const undo = this.makeMove(move);
+      nodes += this.perft(depth - 1);
+      this.unmakeMove(undo);
+    }
+    return nodes;
+  }
+
+  // ממיר מספר משבצת פנימי לשם שחמט רגיל, למשל 0x74 -> e1.
+  static squareName(square) {
+    return String.fromCharCode(97 + (square & 7)) + (8 - (square >> 4));
+  }
+
+  // ממיר מהלך מקודד לטקסט UCI, למשל e2e4 או e7e8q בקידום.
+  static moveToUci(move) {
+    const from = moveFrom(move), to = moveTo(move), promotion = movePromotion(move);
+    return ChessPositionX88.squareName(from) + ChessPositionX88.squareName(to) + (promotion ? "qrbn"[promotion - 1] : "");
+  }
+}
+
+// ================================================================
+// מנוע החיפוש של V30 (ניסוי LMP)
+// ================================================================
+// הקובץ מקבל מצב לוח מ-v27-x88.js ומחפש עבורו את המהלך הטוב ביותר.
+//
+// מילון מושגים:
+// • Negamax: גרסה מקוצרת של Minimax. מחפשים מנקודת המבט של מי שתורו,
+//   ולכן ציון הילד הופך סימן כשחוזרים להורה.
+// • Alpha-Beta: חוסך ענפים שכבר אי אפשר לבחור בהם.
+// • TT (טבלת טרנספוזיציה): שומרת תוצאות של מצבים שכבר נותחו.
+// • PVS: בודק מהלכים מאוחרים בחלון צר, ומרחיב את הבדיקה רק אם צריך.
+// • LMR: מפחית עומק זמנית בחיפוש מהלכים שקטים מאוחרים.
+// • LMP: מדלג בתנאים מוגבלים על חלק מהמהלכים השקטים המאוחרים.
+// • Quiescence: ממשיך לבדוק רצף טקטי כדי לא להעריך עמדה לא יציבה.
+// • History / Killers: מידע שעוזר לסדר מהלכים שסייעו לחיתוך בעבר.
+//
+// ההערות מתארות את המימוש; הן אינן משנות את התנהגות המנוע.
+
+
+// פונקציות וקבועים של הלוח והמהלכים מיובאים מקובץ מנגנון הלוח.
+// MATE הוא ציון מט; INF הוא גבול גדול מחוץ לטווח ההערכות הרגילות.
+const MATE = 30000;
+const INF = 32000;
+// סוגי הרשומות בטבלת הטרנספוזיציה: תוצאה מדויקת, חסם תחתון או חסם עליון.
+const TT_EXACT = 1;
+const TT_LOWER = 2;
+const TT_UPPER = 3;
+const MAX_PLY = 128;
+const MATERIAL = [0, 100, 320, 335, 500, 900, 0];
+
+// מחזיר זמן במילישניות; performance מדויק יותר בדפדפן ו-Date הוא גיבוי.
+function now() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+// מחלקת מנוע החיפוש. כל מופע מחזיק נתוני חיפוש וזיכרון משלו.
+class ChessSearchEngineX88 {
+  // timeLimitMs = זמן חשיבה מרבי; maxDepth = עומק מרבי;
+  // ttCapacity = מספר הרשומות המבוקש בטבלת הטרנספוזיציה.
+  constructor(timeLimitMs = 1000, maxDepth = 64, ttCapacity = 65536) {
+    // פרמטרים מנורמלים כדי למנוע זמן או עומק לא תקינים.
+    this.timeLimitMs = Math.max(0, Number(timeLimitMs) || 0);
+    this.maxDepth = Math.max(1, Math.min(64, maxDepth | 0));
+    this.ttCapacity = Math.max(1024, 2 ** Math.ceil(Math.log2(ttCapacity)));
+    this.ttMask = this.ttCapacity - 1;
+    // טבלת טרנספוזיציה: כל המערכים חולקים אותו index ושומרים שדה אחר.
+    // ttKey מזהה מצב; ttDepth עומק; ttScore ציון; ttMove מהלך; ttBound סוג חסם.
+    this.ttKey = new Uint32Array(this.ttCapacity);
+    this.ttDepth = new Int16Array(this.ttCapacity);
+    this.ttScore = new Int32Array(this.ttCapacity);
+    this.ttMove = new Int32Array(this.ttCapacity);
+    this.ttBound = new Uint8Array(this.ttCapacity);
+    // שני מהלכי Killer לכל עומק: מהלכים שקטים שגרמו לחיתוך בעבר.
+    this.killers = new Int32Array(MAX_PLY * 2);
+    this.killers.fill(-1);
+    // ניקוד History לכל צד ולכל זוג משבצות מקור/יעד; ניקוד גבוה מעלה מהלך בסדר.
+    this.history = new Int16Array(2 * 128 * 128);
+    // מונה צמתים לצורך מדידת החיפוש.
+    this.nodes = 0;
+    this.completedDepth = 0;
+    this.bestMove = -1;
+    this.bestScore = 0;
+    // מספר הופעות של כל מצב בנתיב הנוכחי, לזיהוי חזרה משולשת בחיפוש.
+    this.pathCounts = new Map();
+  }
+
+  // בודק אם הזמן נגמר. בדיקה כל 256 צמתים חוסכת קריאות שעון;
+  // force=true מכריח בדיקה, למשל בתחילת עומק חדש.
+  checkTime(force = false) {
+    if (this.timeLimitMs && (force || (this.nodes & 255) === 0) && now() >= this.deadline) {
+      throw ChessSearchEngineX88.TIMEOUT;
+    }
+  }
+
+  // הערכת חומר ומיקום מנקודת המבט של השחקן שתורו לשחק.
+  // ציון חיובי טוב לצד שבתורו; ציון שלילי טוב ליריב.
+  evaluate(position) {
+    // score צובר יתרון לבן; nonPawnMaterial קובע מתי להפעיל בונוס למלך.
+    let score = 0;
+    let nonPawnMaterial = 0;
+    const kingSquares = [-1, -1];
+    for (let square = 0; square < 128; square += 1) {
+      if (square & 0x88) { square += 7; continue; }
+      const piece = position.squares[square];
+      if (!piece) continue;
+      const side = piece > 6 ? 1 : 0;
+      const type = ((piece - 1) % 6) + 1;
+      const sign = side === 0 ? 1 : -1;
+      const row = square >> 4;
+      const file = square & 7;
+      const center = 7 - Math.abs(file * 2 - 7) - Math.abs(row * 2 - 7);
+      score += sign * MATERIAL[type];
+      if (type !== X88.PAWN && type !== X88.KING) nonPawnMaterial += MATERIAL[type];
+      if (type === X88.KNIGHT) score += sign * center * 4;
+      else if (type === X88.BISHOP) score += sign * center * 2;
+      else if (type === X88.PAWN) {
+        const advance = side === 0 ? 6 - row : row - 1;
+        score += sign * advance * 7 + sign * center;
+      } else if (type === X88.KING) kingSquares[side] = square;
+    }
+    if (nonPawnMaterial < 2600) {
+      for (let side = 0; side < 2; side += 1) {
+        const square = kingSquares[side];
+        if (square >= 0) {
+          const center = 7 - Math.abs((square & 7) * 2 - 7)
+            - Math.abs((square >> 4) * 2 - 7);
+          score += (side === 0 ? 1 : -1) * center * 3;
+        }
+      }
+    }
+    return position.turn === 0 ? score : -score;
+  }
+
+  // מחזיר את הכלי שנלכד. מטפל גם ב-En Passant, שבו הכלי לא נמצא ביעד.
+  capturedPiece(position, move) {
+    const to = moveTo(move);
+    if (position.squares[to]) return position.squares[to];
+    const moving = position.squares[moveFrom(move)];
+    if (((moving - 1) % 6) + 1 === X88.PAWN && to === position.epSquare) {
+      return position.turn === 0 ? 7 : 1;
+    }
+    return 0;
+  }
+
+  // מחשב עדיפות לסדר המהלכים: מהלך TT, לכידות/קידומים, Killer ואז History.
+  moveScore(position, move, ttMove, ply) {
+    if (move === ttMove) return 1000000;
+    const from = moveFrom(move), to = moveTo(move);
+    const moving = position.squares[from];
+    const promotion = movePromotion(move);
+    const victim = this.capturedPiece(position, move);
+    if (victim) {
+      const victimValue = MATERIAL[((victim - 1) % 6) + 1];
+      const attackerValue = MATERIAL[((moving - 1) % 6) + 1];
+      return 50000 + victimValue * 10 - attackerValue + promotion * 1000;
+    }
+    if (promotion) return 60000 + MATERIAL[PROMOTION_TYPE[promotion]];
+    const killerBase = ply * 2;
+    if (this.killers[killerBase] === move) return 40000;
+    if (this.killers[killerBase + 1] === move) return 30000;
+    return this.history[(position.turn * 128 + from) * 128 + to];
+  }
+
+  // ממיין את המהלכים מהעדיפות הגבוהה לנמוכה לפני החיפוש.
+  orderMoves(position, moves, ttMove, ply) {
+    moves.sort((a, b) => this.moveScore(position, b, ttMove, ply)
+      - this.moveScore(position, a, ttMove, ply));
+    return moves;
+  }
+
+  // מתגמל מהלך שקט שגרם לחיתוך Beta: מעלה History ושומר אותו כ-Killer.
+  updateQuietHistory(side, move, depth, ply) {
+    const from = moveFrom(move), to = moveTo(move);
+    const index = (side * 128 + from) * 128 + to;
+    this.history[index] = Math.max(-16000, Math.min(16000,
+      this.history[index] + depth * depth * 12));
+    const base = ply * 2;
+    if (this.killers[base] !== move) {
+      this.killers[base + 1] = this.killers[base];
+      this.killers[base] = move;
+    }
+  }
+
+  // בודק אם המצב קיים בטבלת הטרנספוזיציה. מחזיר מהלך גם אם הרשומה רדודה;
+  // ציון יוחזר רק כשהעומק וסוג החסם מאפשרים להשתמש בו בבטחה.
+  probeTT(key, depth, alpha, beta, ply) {
+    const index = key & this.ttMask;
+    if (!this.ttBound[index] || this.ttKey[index] !== key) return null;
+    const score = this.ttScore[index] > MATE - 1000 ? this.ttScore[index] - ply
+      : this.ttScore[index] < -MATE + 1000 ? this.ttScore[index] + ply
+      : this.ttScore[index];
+    if (this.ttDepth[index] < depth) return { move: this.ttMove[index], score: null };
+    const bound = this.ttBound[index];
+    if (bound === TT_EXACT || (bound === TT_LOWER && score >= beta)
+      || (bound === TT_UPPER && score <= alpha)) {
+      return { move: this.ttMove[index], score };
+    }
+    return { move: this.ttMove[index], score: null };
+  }
+
+  // שומר תוצאת חיפוש ואת סוג החסם. ציוני מט מותאמים לפי ply,
+  // כדי שהציון יישאר נכון גם אם אותו מצב מגיע ממסלול חיפוש אחר.
+  storeTT(key, depth, score, alpha, beta, move, ply) {
+    const index = key & this.ttMask;
+    if (this.ttBound[index] && this.ttKey[index] !== key
+      && this.ttDepth[index] > depth + 1) return;
+    const storedScore = score > MATE - 1000 ? score + ply
+      : score < -MATE + 1000 ? score - ply : score;
+    this.ttKey[index] = key;
+    this.ttDepth[index] = depth;
+    this.ttScore[index] = storedScore;
+    this.ttMove[index] = move;
+    this.ttBound[index] = score <= alpha ? TT_UPPER : score >= beta ? TT_LOWER : TT_EXACT;
+  }
+
+  // מוודא שלצד שבתורו יש מספיק חומר לא-רגלי לפני ניסיון Null Move.
+  hasNullMoveMaterial(position) {
+    let count = 0, value = 0;
+    for (let square = 0; square < 128; square += 1) {
+      if (square & 0x88) { square += 7; continue; }
+      const piece = position.squares[square];
+      if (!piece || (piece > 6 ? 1 : 0) !== position.turn) continue;
+      const type = ((piece - 1) % 6) + 1;
+      if (type === X88.ROOK || type === X88.QUEEN) return true;
+      if (type === X88.BISHOP || type === X88.KNIGHT) {
+        count += 1;
+        value += MATERIAL[type];
+      }
+    }
+    return count >= 2 && value >= 640;
+  }
+
+  // מוסיף מצב לנתיב החיפוש לצורך זיהוי חזרות.
+  pushPath(key) {
+    this.pathCounts.set(key, (this.pathCounts.get(key) || 0) + 1);
+  }
+
+  // מסיר מצב מהנתיב; מוחק אותו מהמפה כשהספירה יורדת לאפס.
+  popPath(key) {
+    const count = (this.pathCounts.get(key) || 1) - 1;
+    if (count <= 0) this.pathCounts.delete(key);
+    else this.pathCounts.set(key, count);
+  }
+
+  // חיפוש Quiescence: אחרי שהעומק הרגיל נגמר, ממשיכים לבדוק
+  // לכידות וקידומים רלוונטיים עד שהעמדה יציבה או עד מגבלת qDepth.
+  quiescence(position, alpha, beta, ply, qDepth = 0) {
+    this.nodes += 1;
+    this.checkTime();
+    const inCheck = position.isInCheck();
+    if (!inCheck && position.halfmoveClock >= 100) return 0;
+    if (ply >= MAX_PLY - 1) return this.evaluate(position);
+
+    const key = position.repetitionKey();
+    if ((this.pathCounts.get(key) || 0) >= 3) return 0;
+
+    let best = -INF;
+    if (!inCheck) {
+      best = this.evaluate(position);
+      if (best >= beta) return beta;
+      if (best > alpha) alpha = best;
+      if (qDepth >= 10) return best;
+    }
+
+    const moves = this.orderMoves(position,
+      position.generateLegalMoves(!inCheck), -1, ply);
+    if (!moves.length) {
+      if (inCheck) return -MATE + ply;
+      return position.generateLegalMoves().length ? best : 0;
+    }
+
+    for (const move of moves) {
+      const victim = this.capturedPiece(position, move);
+      const gain = victim ? MATERIAL[((victim - 1) % 6) + 1] : 0;
+      const isPromotion = movePromotion(move) !== 0;
+      const undo = position.makeMove(move);
+      let childKey = 0, pathAdded = false, score;
+      try {
+        const givesCheck = position.isInCheck();
+        if (!inCheck && !isPromotion && !givesCheck && best + gain + 160 < alpha) continue;
+        childKey = position.repetitionKey();
+        this.pushPath(childKey);
+        pathAdded = true;
+        score = -this.quiescence(position, -beta, -alpha, ply + 1, qDepth + 1);
+      } finally {
+        if (pathAdded) this.popPath(childKey);
+        position.unmakeMove(undo);
+      }
+      if (score > best) best = score;
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  // החיפוש הראשי: Negamax + Alpha-Beta, טבלת טרנספוזיציה,
+  // Null Move, סידור מהלכים, PVS, LMR ו-LMP.
+  // depth = עומק שנותר; alpha/beta = חלון הציונים; ply = מרחק מהשורש.
+  negamax(position, depth, alpha, beta, ply, allowNull = true, checkExtensionBudget = 1) {
+    this.nodes += 1;
+    this.checkTime();
+    if (ply >= MAX_PLY - 1) return this.evaluate(position);
+    const inCheck = position.isInCheck();
+    if (!inCheck && position.halfmoveClock >= 100) return 0;
+    // הארכת שח מוגבלת לפעם אחת ברצף ורק כשהחיפוש קרוב לאופק.
+    // בצומת שאינו בשח התקציב מתאפס; כך נמנעת הרחבה בלתי מוגבלת של רצפי שח.
+    let childCheckExtensionBudget = inCheck ? checkExtensionBudget : 1;
+    if (inCheck && depth <= 1 && childCheckExtensionBudget > 0) {
+      depth += 1;
+      childCheckExtensionBudget -= 1;
+    }
+    // חזרה משולשת תלויה בהיסטוריית המשחק, ולכן בודקים אותה לפני טבלת הטרנספוזיציה.
+    const repeated = (this.pathCounts.get(position.repetitionKey()) || 0) >= 3;
+    if (repeated) {
+      // מט גובר על תיקו: רק בעמדת שח צריך לוודא שאין לצד השח מהלך חוקי.
+      if (!inCheck) return 0;
+      const evasions = position.generateLegalMoves();
+      if (!evasions.length) return -MATE + ply;
+      return 0;
+    }
+    const key = position.hash;
+    // originalAlpha נשמר כדי לקבוע איזה סוג חסם לשמור בטבלת הטרנספוזיציה.
+    const originalAlpha = alpha;
+    // PV node הוא צומת עם חלון רחב; בצומת כזה לא מפעילים LMP.
+    const pvNode = beta - alpha > 1;
+    const tt = this.probeTT(key, depth, alpha, beta, ply);
+    const ttMove = tt ? tt.move : -1;
+    if (tt && tt.score !== null) return tt.score;
+    if (depth <= 0) return this.quiescence(position, alpha, beta, ply);
+
+    // Null Move Pruning: מדמים ויתור על תור. אם גם כך מגיעים ל-beta,
+    // לרוב אפשר לחתוך את הענף. לא מפעילים בשח, בעומק נמוך או בחוסר חומר.
+    if (allowNull && depth >= 3 && !inCheck && this.hasNullMoveMaterial(position)) {
+      const undo = position.makeNullMove();
+      let score;
+      try {
+        score = -this.negamax(position, depth - 1 - (2 + Math.floor(depth / 5)),
+          -beta, -beta + 1, ply + 1, false, childCheckExtensionBudget);
+      } finally {
+        position.unmakeMove(undo);
+      }
+      if (score >= beta) return beta;
+    }
+
+    // מייצרים מהלכים חוקיים. רשימה ריקה פירושה מט או פט.
+    const moves = position.generateLegalMoves();
+    if (!moves.length) return inCheck ? -MATE + ply : 0;
+    this.orderMoves(position, moves, ttMove, ply);
+    let bestScore = -INF, bestMove = moves[0];
+    for (let index = 0; index < moves.length; index += 1) {
+      const move = moves[index];
+      const side = position.turn;
+      // מהלך שקט = לא לכידה ולא קידום; רק מהלכים כאלה עשויים להיות מדולגים.
+      const quiet = !this.capturedPiece(position, move) && !movePromotion(move);
+      // LMP: רק בעומק 1–3, ורק למהלכים שקטים שמדורגים מאוחר.
+      // סף שמרני: בעומק 1 מדלגים החל מהמהלך ה-7, בעומק 2 מה-10, ובעומק 3 מה-15.
+      // סף LMP גדל עם העומק: בעומק גבוה יותר מדלגים רק מאוחר יותר.
+      const lmpThreshold = depth * depth + 5;
+      // מדלגים רק בצומת חיתוך, ורק אם המהלכים הקודמים לא שיפרו את alpha.
+      // לא מדלגים אם כבר זוהה מצב של מט קרוב לרעת הצד המחפש.
+      // LMP נשקל רק בצומת שאינו בשח ואינו PV, למהלך שקט שאינו מהלך TT,
+      // אחרי שלא נמצא עד כה שיפור, ורק בעומק 1–3 ומעבר לסף.
+      const movingType = typeOf(position.squares[moveFrom(move)]);
+      const considerLMP = !inCheck && !pvNode && quiet && movingType !== X88.KING && move !== ttMove
+        && bestScore <= originalAlpha && bestScore > -MATE + MAX_PLY
+        && depth <= 3 && index >= lmpThreshold;
+      const undo = position.makeMove(move);
+      const childKey = position.repetitionKey();
+      let score;
+      let pathAdded = false;
+      try {
+        // בודקים אם המהלך נותן שח אחרי שבוצע זמנית.
+        // מהלך כזה הוא טקטי, ולכן אסור ל-LMP לדלג עליו או ל-LMR לצמצם את עומקו.
+        const givesCheck = quiet && position.isInCheck();
+        if (considerLMP && !givesCheck) continue;
+        this.pushPath(childKey);
+        pathAdded = true;
+        // LMR נשאר פעיל רק למהלכים שקטים מאוחרים שאינם מהלכי מלך או שח.
+        const reduction = !inCheck && quiet && movingType !== X88.KING
+          && !givesCheck && depth >= 3 && index >= 4
+          ? (depth >= 5 && index >= 10 ? 2 : 1) : 0;
+        if (index === 0) {
+          score = -this.negamax(position, depth - 1, -beta, -alpha, ply + 1, true, childCheckExtensionBudget);
+        } else {
+          score = -this.negamax(position, depth - 1 - reduction, -alpha - 1, -alpha, ply + 1, true, childCheckExtensionBudget);
+          if (score > alpha && reduction) {
+            score = -this.negamax(position, depth - 1, -alpha - 1, -alpha, ply + 1, true, childCheckExtensionBudget);
+          }
+          if (score > alpha && score < beta) {
+            score = -this.negamax(position, depth - 1, -beta, -alpha, ply + 1, true, childCheckExtensionBudget);
+          }
+        }
+      } finally {
+        if (pathAdded) this.popPath(childKey);
+        position.unmakeMove(undo);
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) {
+        if (quiet) this.updateQuietHistory(side, move, depth, ply);
+        break;
+      }
+    }
+    this.storeTT(key, depth, bestScore, originalAlpha, beta, bestMove, ply);
+    return bestScore;
+  }
+
+  // חיפוש מהשורש: בודק את המהלכים הראשיים ומחזיר את הטוב ביותר.
+  // הראשון נבדק בחלון מלא; הבאים מתחילים בחלון צר (PVS).
+  searchRoot(position, rootMoves, depth) {
+    let alpha = -INF, beta = INF, bestScore = -INF;
+    let bestMove = rootMoves[0];
+    const key = position.hash;
+    for (let index = 0; index < rootMoves.length; index += 1) {
+      const move = rootMoves[index];
+      const undo = position.makeMove(move);
+      const childKey = position.repetitionKey();
+      let score;
+      try {
+        this.pushPath(childKey);
+        if (index === 0) score = -this.negamax(position, depth - 1, -beta, -alpha, 1);
+        else {
+          score = -this.negamax(position, depth - 1, -alpha - 1, -alpha, 1);
+          if (score > alpha && score < beta) {
+            score = -this.negamax(position, depth - 1, -beta, -alpha, 1);
+          }
+        }
+      } finally {
+        this.popPath(childKey);
+        position.unmakeMove(undo);
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+      if (score > alpha) alpha = score;
+
+      // אם עומק 1 עדיין לא הושלם, שומרים בכל רגע את התוצאה הטובה
+      // ביותר מבין מהלכי השורש שכבר נבדקו במלואם. אם הזמן ייגמר באמצע
+      // הסבב, search() יוכל להחזיר את ההתקדמות הזו במקום מהלך שרירותי
+      // מסדר היצירה המקורי. אחרי שעומק שלם הושלם, נשמרת תוצאתו.
+      if (this.completedDepth === 0) {
+        this.bestMove = bestMove;
+        this.bestScore = bestScore;
+      }
+    }
+    this.storeTT(key, depth, bestScore, -INF, INF, bestMove, 0);
+    return { move: bestMove, score: bestScore };
+  }
+
+  // נקודת הכניסה למנוע. מריצה Iterative Deepening: עומק 1, אחריו 2 וכו'.
+  // resume=true ממשיך מהעומק האחרון ושומר TT, Killer ו-History.
+  // preparedRootMoves חוסך יצירה חוזרת של מהלכי השורש שכבר חושבו ב-Ponder.
+  search(position, gameHistory = null, resume = false, preparedRootMoves = null) {
+    this.nodes = 0;
+    if (!resume) {
+      this.completedDepth = 0;
+      this.bestMove = -1;
+      this.bestScore = 0;
+    }
+    this.startedAt = now();
+    this.deadline = this.timeLimitMs ? this.startedAt + this.timeLimitMs : Infinity;
+    // מאפסים את היסטוריית החיפוש ומזריקים את מצבי המשחק האמיתיים.
+    // כך המנוע מזהה חזרה שלישית גם אם שתי ההופעות הקודמות היו לפני תחילת החיפוש.
+    this.pathCounts.clear();
+    const rootKey = position.repetitionKey();
+    let rootAddedToPath = false;
+    let rootFoundInHistory = false;
+    if (Array.isArray(gameHistory)) {
+      for (const fen of gameHistory) {
+        if (typeof fen !== "string") continue;
+        const historyKey = new ChessPositionX88(fen).repetitionKey();
+        this.pushPath(historyKey);
+        if (historyKey === rootKey) rootFoundInHistory = true;
+      }
+    }
+    if (!rootFoundInHistory) {
+      this.pushPath(rootKey);
+      rootAddedToPath = true;
+    }
+
+    const rootMoves = preparedRootMoves || position.generateLegalMoves();
+    if (!rootMoves.length) {
+      return { move: -1, score: position.isInCheck() ? -MATE : 0, depth: 0, nodes: this.nodes };
+    }
+    if (this.bestMove < 0) this.bestMove = rootMoves[0];
+
+    try {
+      for (let depth = this.completedDepth + 1; depth <= this.maxDepth; depth += 1) {
+        // מסדרים לפני בדיקת הזמן: גם אם התקציב נגמר לפני תחילת
+        // החיפוש, ברירת המחדל תהיה המהלך בעל העדיפות הטקטית הגבוהה,
+        // ולא בהכרח המהלך הראשון שנוצר (למשל הזזת צריח הלוך ושוב).
+        this.orderMoves(position, rootMoves, this.ttMove[position.hash & this.ttMask], 0);
+        if (this.completedDepth === 0) this.bestMove = rootMoves[0];
+        this.checkTime(true);
+        const result = this.searchRoot(position, rootMoves, depth);
+        this.bestMove = result.move;
+        this.bestScore = result.score;
+        this.completedDepth = depth;
+        if (Math.abs(result.score) >= MATE - 128) break;
+      }
+    } catch (error) {
+      if (error !== ChessSearchEngineX88.TIMEOUT) throw error;
+    } finally {
+      if (rootAddedToPath) this.popPath(rootKey);
+    }
+    return {
+      move: this.bestMove,
+      uci: this.bestMove >= 0 ? ChessPositionX88.moveToUci(this.bestMove) : null,
+      score: this.bestScore,
+      depth: this.completedDepth,
+      nodes: this.nodes,
+      timeMs: Math.round(now() - this.startedAt)
+    };
+  }
+}
+
+ChessSearchEngineX88.TIMEOUT = Object.freeze({ timeout: true });
+
+</script>
+<script>
+"use strict";
+
+// ================================================================
+// ממשק המשחק – כללי המשחק והציור נשארים נפרדים ממנוע החיפוש.
+// ================================================================
+const SYMBOLS = ["", "♙", "♘", "♗", "♖", "♕", "♔", "♟", "♞", "♝", "♜", "♛", "♚"];
+const NAMES = ["ריק", "רגלי לבן", "פרש לבן", "רץ לבן", "צריח לבן", "מלכה לבנה", "מלך לבן",
+  "רגלי שחור", "פרש שחור", "רץ שחור", "צריח שחור", "מלכה שחורה", "מלך שחור"];
+
+// קיצורי הפניות לרכיבי הממשק, כדי לא לחפש אותם מחדש בכל פעולה.
+const boardEl = document.getElementById("board");
+const statusEl = document.getElementById("status");
+const movesEl = document.getElementById("moves");
+const depthEl = document.getElementById("depth");
+const nodesEl = document.getElementById("nodes");
+const elapsedEl = document.getElementById("elapsed");
+const timeInput = document.getElementById("thinkTime");
+const undoButton = document.getElementById("undo");
+
+// מצב המשחק הראשי. המנוע מקבל עותק FEN בתוך ה-Worker, לא משנה את הלוח הזה.
+let position = new ChessPositionX88(START_FEN);
+let history = [position.toFEN()];
+let moves = [];
+let selected = -1;
+let targets = [];
+let lastMove = -1;
+let flipped = false;
+let thinking = false;
+let finished = false;
+let requestId = 0;
+let worker = null;
+let workerUrl = null;
+const resignButton = document.getElementById("resign");
+const engineSource = document.getElementById("engine-source").textContent;
+
+// בונה Worker מתוך קוד המנוע שכבר נמצא בדף; אין קובץ חיצוני או שרת.
+function startWorker() {
+  if (worker) worker.terminate();
+  if (workerUrl) URL.revokeObjectURL(workerUrl);
+  const workerSource = engineSource + `
+// כל ענף מקבל טבלת מצבים קטנה; כך הזיכרון נשאר מוגבל גם כשיש הרבה תגובות.
+const PONDER_TABLE_SIZE = 2048;
+let ponderBranches = new Map();
+let ponderGeneration = 0;
+
+async function preparePonder(fen, history) {
+  const generation = ++ponderGeneration; // שינוי הדור מבטל הכנה ישנה כשהמשחק מתקדם.
+  ponderBranches.clear();
+  const board = new ChessPositionX88(fen);
+  const moves = board.generateLegalMoves();
+
+  // מקדים הכאות, קידומים ושח; את יתר המהלכים בודקים לפי הסדר המקורי.
+  // מחשבים את העדיפות פעם אחת בלבד, לפני שמתחילים את סבבי החיפוש.
+  const ranked = moves.map(move => {
+    const from = moveFrom(move), to = moveTo(move);
+    const attacker = board.squares[from];
+    const type = typeOf(attacker);
+    let victimSquare = to;
+    if (type === X88.PAWN && to === board.epSquare && !board.squares[to]) {
+      victimSquare = to + (board.turn === 0 ? 16 : -16);
+    }
+    const victim = board.squares[victimSquare];
+    let score = victim ? 10000 + MATERIAL[typeOf(victim)] * 10 - MATERIAL[type] : 0;
+    const promotion = movePromotion(move);
+    if (promotion) score += 9000 + MATERIAL[PROMOTION_TYPE[promotion]];
+    const undo = board.makeMove(move);
+    try { if (board.isInCheck()) score += 30000; }
+    finally { board.unmakeMove(undo); }
+    return { move, score };
+  });
+  ranked.sort((a, b) => b.score - a.score);
+
+  // כל סבב מוגבל לכ-900ms בסך הכול ומחלק את הזמן בין המהלכים האפשריים.
+  const branchBudget = Math.max(12, Math.min(45, Math.floor(900 / Math.max(1, moves.length))));
+  let unfinished = moves.length;
+  while (generation === ponderGeneration && unfinished > 0) {
+    for (const item of ranked) {
+      if (generation !== ponderGeneration) return;
+      const undo = board.makeMove(item.move);
+      try {
+        // FEN מלא מונע ערבוב בין ענפים שונים, כולל שעוני המשחק.
+        const fenAfterHuman = board.toFEN();
+        let branch = ponderBranches.get(fenAfterHuman);
+        if (!branch) {
+          const replies = board.generateLegalMoves();
+          if (!replies.length) {
+            branch = { done: true, moves: replies, nodes: 0, result: {
+              move: -1, score: board.isInCheck() ? -MATE : 0, depth: 0, nodes: 0, timeMs: 0
+            }};
+            ponderBranches.set(fenAfterHuman, branch);
+            unfinished -= 1;
+          } else {
+            const branchHistory = history.slice();
+            if (branchHistory[branchHistory.length - 1] !== fenAfterHuman) branchHistory.push(fenAfterHuman);
+            branch = {
+              engine: new ChessSearchEngineX88(branchBudget, 64, PONDER_TABLE_SIZE),
+              moves: replies,
+              history: branchHistory,
+              nodes: 0,
+              done: false
+            };
+            ponderBranches.set(fenAfterHuman, branch);
+          }
+        }
+        if (!branch.done) {
+          const result = branch.engine.search(board, branch.history, true, branch.moves);
+          branch.nodes += result.nodes;
+          branch.result = result;
+          if (branch.engine.completedDepth >= 64 || Math.abs(branch.engine.bestScore) >= MATE - 128) {
+            branch.done = true;
+            unfinished -= 1;
+          }
+        }
+      } finally {
+        board.unmakeMove(undo);
+      }
+      if (generation !== ponderGeneration) return;
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+}
+
+self.onmessage = event => {
+  const data = event.data;
+  if (data.type === "stopPonder") {
+    ponderGeneration += 1;
+    ponderBranches.clear();
+    return;
+  }
+  if (data.type === "ponder") {
+    preparePonder(data.fen, data.history || []).catch(error => {
+      self.postMessage({ type: "ponderError", error: String(error && error.message || error) });
+    });
+    return;
+  }
+  if (data.type !== "search") return;
+
+  ponderGeneration += 1;
+  try {
+    const board = new ChessPositionX88(data.fen);
+    // משתמשים רק בענף של המהלך שנבחר ומפנים מיד את כל הענפים האחרים.
+    const prepared = ponderBranches.get(board.toFEN()) || null;
+    ponderBranches.clear();
+    const cached = prepared && (prepared.done || prepared.engine.completedDepth > 0) ? prepared : null;
+    const preparedDepth = cached && cached.engine ? cached.engine.completedDepth : 0;
+    let result;
+    if (cached && cached.done) {
+      result = Object.assign({}, cached.result, { nodes: cached.nodes, timeMs: 0 });
+    } else {
+      const engine = cached ? cached.engine : new ChessSearchEngineX88(data.timeMs, 64);
+      if (cached) engine.timeLimitMs = data.timeMs;
+      result = engine.search(board, data.history, Boolean(cached), cached ? cached.moves : null);
+      if (cached) result.nodes += cached.nodes;
+    }
+    result.ponderUsed = Boolean(cached);
+    result.preparedDepth = preparedDepth;
+    result.preparedNodes = cached ? cached.nodes : 0;
+    self.postMessage({ id: data.id, result });
+  } catch (error) {
+    self.postMessage({ id: data.id, error: String(error && error.stack || error) });
+  }
+};`;
+  workerUrl = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
+  worker = new Worker(workerUrl);
+  worker.onmessage = receiveEngineResult;
+  worker.onerror = (event) => {
+    thinking = false;
+    statusEl.textContent = "שגיאה בעובד החיפוש: " + (event.message || "שגיאה לא ידועה");
+    render();
+  };
+}
+
+// מקבל תשובה, מוודא שהיא שייכת לחיפוש הנוכחי ושהמהלך חוקי לפני ביצועו.
+function receiveEngineResult(event) {
+  const data = event.data;
+  if (data.type === "ponderError") return;
+  if (data.id !== requestId) return;
+  thinking = false;
+  if (data.error) {
+    statusEl.textContent = "שגיאה במנוע: " + data.error;
+    render();
+    return;
+  }
+  depthEl.textContent = String(data.result.depth);
+  nodesEl.textContent = data.result.nodes.toLocaleString("he-IL");
+  elapsedEl.textContent = (data.result.timeMs / 1000).toFixed(2) + " שניות" +
+    (data.result.ponderUsed ? " · Ponder" : "");
+  if (data.result.move < 0) {
+    checkGameEnd();
+    render();
+    return;
+  }
+  const move = data.result.move;
+  if (!position.generateLegalMoves().includes(move)) {
+    statusEl.textContent = "המנוע החזיר מהלך לא חוקי; המהלך לא בוצע.";
+    render();
+    return;
+  }
+  applyMove(move);
+  afterMove();
+}
+
+function clearSelection() {
+  selected = -1;
+  targets = [];
+}
+
+// מפתח חזרה: פריסת הכלים, הצד שבתור, זכויות הצרחה ו-en-passant.
+function repetitionKey(fen) {
+  return fen.split(" ").slice(0, 4).join(" ");
+}
+
+function insufficientMaterial() {
+  let minors = 0;
+  for (let square = 0; square < 128; square += 1) {
+    if (square & 0x88) { square += 7; continue; }
+    const piece = position.squares[square];
+    if (!piece) continue;
+    const type = typeOf(piece);
+    if (type === X88.PAWN || type === X88.ROOK || type === X88.QUEEN) return false;
+    if (type === X88.KNIGHT || type === X88.BISHOP) minors += 1;
+  }
+  return minors <= 1;
+}
+
+// בדיקת סיום אחרי מהלך: מט, פט ושלושת מקרי התיקו הפשוטים.
+function checkGameEnd() {
+  const legal = position.generateLegalMoves();
+  if (!legal.length) {
+    finished = true;
+    statusEl.textContent = position.isInCheck()
+      ? "מט! " + (position.turn === 0 ? "השחור ניצח." : "הלבן ניצח.")
+      : "פט — תיקו.";
+    return;
+  }
+  if (position.halfmoveClock >= 100) {
+    finished = true;
+    statusEl.textContent = "תיקו לפי כלל 50 המהלכים.";
+    return;
+  }
+  const key = repetitionKey(position.toFEN());
+  if (history.filter(fen => repetitionKey(fen) === key).length >= 3) {
+    finished = true;
+    statusEl.textContent = "תיקו בחזרה משולשת.";
+    return;
+  }
+  if (insufficientMaterial()) {
+    finished = true;
+    statusEl.textContent = "תיקו בגלל חומר לא מספיק למט.";
+  }
+}
+
+// מבצע מהלך אחד ושומר FEN כדי לאפשר ביטול מדויק.
+function applyMove(move) {
+  const uci = ChessPositionX88.moveToUci(move);
+  position.makeMove(move);
+  position.ply = 0; // מהלך משחק אמיתי אינו חלק ממחסנית החיפוש; מתחילים חיפוש חדש מעומק 0.
+  moves.push(uci);
+  history.push(position.toFEN());
+  lastMove = move;
+  clearSelection();
+}
+
+function afterMove() {
+  checkGameEnd();
+  render();
+  if (!finished && !window.onlineMode) {
+    if (position.turn === 1) window.setTimeout(computerMove, 60);
+    else window.setTimeout(startPonder, 0);
+  }
+}
+
+function startPonder() {
+  if (finished || thinking || window.onlineMode || position.turn !== 0 || !worker) return;
+  worker.postMessage({
+    type: "ponder",
+    fen: position.toFEN(),
+    history: history.slice()
+  });
+}
+
+// שולח למנוע את העמדה הנוכחית ואת זמן החשיבה שהוגדר במילישניות.
+function computerMove() {
+  if (finished || thinking || window.onlineMode || position.turn !== 1) return;
+  const timeMs = Math.max(1, Math.min(120000, Number(timeInput.value) || 700));
+  thinking = true;
+  requestId += 1;
+  statusEl.textContent = "המחשב חושב…";
+  render();
+  worker.postMessage({ type: "search", id: requestId, fen: position.toFEN(), timeMs, history: history.slice() });
+}
+
+function renderBoard() {
+  const fragment = document.createDocumentFragment();
+  for (let r = 0; r < 8; r += 1) {
+    const row = flipped ? 7 - r : r;
+    for (let f = 0; f < 8; f += 1) {
+      const file = flipped ? 7 - f : f;
+      const square = row * 16 + file;
+      const piece = position.squares[square];
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "square " + ((row + file) % 2 ? "dark" : "light");
+      cell.dataset.square = String(square);
+      cell.setAttribute("aria-label", ChessPositionX88.squareName(square) + ", " + NAMES[piece]);
+      if (square === selected) cell.classList.add("selected");
+      if (lastMove >= 0 && (square === moveFrom(lastMove) || square === moveTo(lastMove))) cell.classList.add("last-move");
+      if (targets.some(move => moveTo(move) === square)) cell.classList.add(piece ? "capture-target" : "legal-target");
+      if (piece) {
+        const glyph = document.createElement("span");
+        glyph.className = "piece " + (piece <= 6 ? "white-piece" : "black-piece");
+        glyph.textContent = SYMBOLS[piece];
+        cell.appendChild(glyph);
+      }
+      if ((!flipped && row === 7) || (flipped && row === 0)) {
+        const label = document.createElement("span");
+        label.className = "coordinate file-coordinate";
+        label.textContent = "abcdefgh"[file];
+        cell.appendChild(label);
+      }
+      if ((!flipped && file === 0) || (flipped && file === 7)) {
+        const label = document.createElement("span");
+        label.className = "coordinate rank-coordinate";
+        label.textContent = String(8 - row);
+        cell.appendChild(label);
+      }
+      fragment.appendChild(cell);
+    }
+  }
+  boardEl.replaceChildren(fragment);
+}
+
+function renderMoves() {
+  movesEl.replaceChildren();
+  for (let i = 0; i < moves.length; i += 2) {
+    const row = document.createElement("div");
+    row.className = "move-row";
+    const num = document.createElement("span");
+    num.className = "move-number";
+    num.textContent = (Math.floor(i / 2) + 1) + ".";
+    const white = document.createElement("span");
+    white.textContent = moves[i] || "";
+    const black = document.createElement("span");
+    black.textContent = moves[i + 1] || "";
+    row.append(num, white, black);
+    movesEl.appendChild(row);
+  }
+  movesEl.scrollTop = movesEl.scrollHeight;
+}
+
+function render() {
+  renderBoard();
+  renderMoves();
+  undoButton.disabled = window.onlineMode || thinking || moves.length === 0;
+  resignButton.disabled = finished || thinking;
+  if (!finished && !thinking) {
+    if (window.onlineMode) statusEl.textContent = !window.onlineReady ? "ממתין לחיבור השחקן השני…" : (position.turn === window.onlineColor ? "תורך — בצע מהלך." : "היריב חושב…");
+    else statusEl.textContent = position.turn === 0 ? "תורך — הלבן משחק." : "תור המחשב.";
+  }
+}
+
+// בחירת כלי ואז יעד מתוך רשימת המהלכים החוקיים בלבד.
+function onBoardClick(event) {
+  const cell = event.target.closest("button[data-square]");
+  if (!cell || thinking || finished || (window.onlineMode ? (!window.onlineReady || position.turn !== window.onlineColor) : position.turn !== 0)) return;
+  const square = Number(cell.dataset.square);
+  const piece = position.squares[square];
+  if (selected >= 0) {
+    const choices = targets.filter(move => moveTo(move) === square);
+    if (choices.length) {
+      // אם יש כמה קידומים, מלכה נבחרת כברירת מחדל.
+      const chosen = choices.find(move => movePromotion(move) === 1) || choices[0];
+      const uci = ChessPositionX88.moveToUci(chosen);
+      applyMove(chosen);
+      if (window.onlineMode) window.sendOnlineMove(uci);
+      afterMove();
+      return;
+    }
+  }
+  if (piece && (window.onlineMode ? (piece <= 6 ? 0 : 1) === window.onlineColor : piece <= 6)) {
+    selected = square;
+    targets = position.generateLegalMoves().filter(move => moveFrom(move) === square);
+  } else clearSelection();
+  render();
+}
+
+function undoTurn() {
+  if (window.onlineMode || thinking || moves.length === 0) return;
+  if (worker) worker.postMessage({ type: "stopPonder" });
+  const count = Math.min(2, moves.length);
+  moves.splice(-count, count);
+  history.splice(-count, count);
+  position = new ChessPositionX88(history[history.length - 1]);
+  lastMove = -1;
+  if (moves.length) {
+    const uci = moves[moves.length - 1];
+    lastMove = position.generateLegalMoves().find(move => ChessPositionX88.moveToUci(move) === uci) ?? -1;
+  }
+  finished = false;
+  depthEl.textContent = nodesEl.textContent = elapsedEl.textContent = "—";
+  render();
+  if (!window.onlineMode && position.turn === 0) startPonder();
+}
+
+function newGame(suppressPonder = false) {
+  if (window.onlineMode && window.leaveOnlineGame) window.leaveOnlineGame();
+  requestId += 1; // פוסל תשובה שעדיין עשויה להגיע מעובד קודם.
+  thinking = false;
+  finished = false;
+  position = new ChessPositionX88(START_FEN);
+  history = [position.toFEN()];
+  moves = [];
+  lastMove = -1;
+  depthEl.textContent = nodesEl.textContent = elapsedEl.textContent = "—";
+  startWorker();
+  statusEl.textContent = "משחק חדש — אתה בלבן.";
+  render();
+  if (!suppressPonder && !window.onlineMode) startPonder();
+}
+
+boardEl.addEventListener("click", onBoardClick);
+document.getElementById("newGame").addEventListener("click", newGame);
+undoButton.addEventListener("click", undoTurn);
+document.getElementById("flip").addEventListener("click", () => { flipped = !flipped; renderBoard(); });
+resignButton.addEventListener("click", () => {
+  if (thinking || finished) return;
+  if (window.onlineMode) { window.resignOnlineGame(); return; }
+  finished = true;
+  statusEl.textContent = "נכנעת — המחשב ניצח.";
+  render();
+});
+timeInput.addEventListener("change", () => {
+  timeInput.value = String(Math.max(1, Math.min(120000, Number(timeInput.value) || 700)));
+});
+
+startWorker();
+render();
+if (!window.onlineMode) startPonder();
+</script>
+
+<script id="online-client">
+"use strict";
+// שכבת המשחק המקוון: החוקים נשארים במנוע השחמט הקיים, והשרת מסנכרן רק מהלכים חוקיים.
+window.onlineMode = false;
+window.onlineReady = false;
+window.onlineColor = null;
+window.onlineSocket = null;
+window.onlineRoomId = null;
+const onlineInfo = document.getElementById("onlineInfo");
+const onlineInfoText = document.getElementById("onlineInfoText");
+const inviteLinkInput = document.getElementById("inviteLink");
+const roomCodeInput = document.getElementById("roomCode");
+const modeLabelEl = document.getElementById("modeLabel");
+
+function showOnlineInfo(message, link = "") {
+  onlineInfo.hidden = false;
+  onlineInfoText.textContent = message;
+  inviteLinkInput.value = link;
+}
+function updateOnlineLabel() {
+  modeLabelEl.textContent = window.onlineColor === 0 ? "אתה בלבן · היריב בשחור" : "אתה בשחור · היריב בלבן";
+}
+function applyOnlineState(message) {
+  if (message.fen) position = new ChessPositionX88(message.fen);
+  if (Array.isArray(message.history) && message.history.length) history = message.history.slice();
+  else if (message.fen) history = [message.fen];
+  if (Array.isArray(message.moves)) moves = message.moves.slice();
+  lastMove = -1;
+  selected = -1;
+  targets = [];
+  finished = Boolean(message.finished);
+  thinking = false;
+  render();
+}
+function sendOnlineMessage(payload) {
+  const socket = window.onlineSocket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    statusEl.textContent = "החיבור נותק. רענן את הדף כדי להתחבר מחדש.";
+    return false;
+  }
+  socket.send(JSON.stringify(payload));
+  return true;
+}
+window.sendOnlineMove = function (uci) {
+  sendOnlineMessage({ type: "move", uci });
+};
+window.resignOnlineGame = function () {
+  sendOnlineMessage({ type: "resign" });
+};
+window.leaveOnlineGame = function () {
+  if (window.onlineSocket) {
+    try { window.onlineSocket.close(); } catch (_) {}
+  }
+  window.onlineSocket = null;
+  window.onlineMode = false;
+  window.onlineReady = false;
+  window.onlineColor = null;
+  window.onlineRoomId = null;
+  onlineInfo.hidden = true;
+  modeLabelEl.textContent = "אתה משחק בלבן · המחשב בשחור";
+  const address = new URL(location.href);
+  address.searchParams.delete("room");
+  historyReplace(address);
+  render();
+};
+function historyReplace(address) {
+  window.history.replaceState({}, "", address.pathname + address.search + address.hash);
+}
+function startOnlineGame(action, room) {
+  if (window.onlineMode) window.leaveOnlineGame();
+  newGame(true); // כל חדר חדש מתחיל מעמדת פתיחה נקייה, ללא חיפוש מקומי.
+  window.onlineMode = true;
+  window.onlineReady = false;
+  window.onlineColor = null;
+  statusEl.textContent = "מתחבר לשרת המשחק…";
+  // גם הקישור הישן ממשיך לעבוד, אבל כל חדרי המשחק מנוהלים בשרת החדש והקצר.
+  const websocketHost = location.hostname === "chess-online-n9mm.onrender.com" ? "mate-pcqg.onrender.com" : location.host;
+  const socketUrl = (location.protocol === "https:" ? "wss://" : "ws://") + websocketHost + "/ws";
+  const socket = new WebSocket(socketUrl);
+  window.onlineSocket = socket;
+  socket.addEventListener("open", () => {
+    const token = action === "join" ? sessionStorage.getItem("chess-room-token:" + room) : null;
+    sendOnlineMessage({ type: action, room, token });
+  });
+  socket.addEventListener("message", event => {
+    let message;
+    try { message = JSON.parse(event.data); } catch (_) { return; }
+    if (message.type === "room_created" || message.type === "room_joined") {
+      window.onlineRoomId = message.room;
+      window.onlineColor = message.color;
+      sessionStorage.setItem("chess-room-token:" + message.room, message.token);
+      roomCodeInput.value = message.room;
+      updateOnlineLabel();
+      const share = new URL(location.href);
+      share.searchParams.set("room", message.room);
+      historyReplace(share);
+      showOnlineInfo("קוד החדר: " + message.room + " · שלח את הקישור לחבר", share.href);
+      applyOnlineState(message);
+      statusEl.textContent = message.color === 0 ? "החדר נוצר. ממתין לשחקן השני…" : "הצטרפת לחדר. ממתין לשחקן השני…";
+      return;
+    }
+    if (message.type === "room_status") {
+      window.onlineReady = message.ready;
+      statusEl.textContent = message.ready ? "שני השחקנים מחוברים. הלבן מתחיל!" : "ממתין לחיבור השחקן השני…";
+      render();
+      return;
+    }
+    if (message.type === "opponent_move") {
+      const move = position.generateLegalMoves().find(candidate => ChessPositionX88.moveToUci(candidate) === message.uci);
+      if (!move) {
+        applyOnlineState(message);
+        statusEl.textContent = "סנכרנתי מחדש את מצב הלוח.";
+        return;
+      }
+      applyMove(move);
+      if (message.fen && position.toFEN() !== message.fen) applyOnlineState(message);
+      else if (Array.isArray(message.history)) history = message.history.slice();
+      afterMove();
+      return;
+    }
+    if (message.type === "move_accepted") {
+      if (message.fen && position.toFEN() !== message.fen) applyOnlineState(message);
+      return;
+    }
+    if (message.type === "game_over") {
+      finished = true;
+      thinking = false;
+      statusEl.textContent = message.message || "המשחק הסתיים.";
+      render();
+      return;
+    }
+    if (message.type === "peer_disconnected") {
+      window.onlineReady = false;
+      statusEl.textContent = "היריב התנתק. אפשר להמתין שיתחבר מחדש.";
+      render();
+      return;
+    }
+    if (message.type === "room_error") {
+      statusEl.textContent = message.message || "לא ניתן להצטרף לחדר.";
+      showOnlineInfo(message.message || "שגיאה בחדר.");
+      return;
+    }
+  });
+  socket.addEventListener("close", () => {
+    if (window.onlineSocket === socket && window.onlineMode) {
+      window.onlineReady = false;
+      statusEl.textContent = "החיבור לשרת נסגר. רענן את הדף כדי לנסות שוב.";
+      render();
+    }
+  });
+  socket.addEventListener("error", () => {
+    statusEl.textContent = "שגיאה בחיבור לשרת. בדוק את החיבור לאינטרנט ונסה שוב.";
+  });
+}
+document.getElementById("createRoom").addEventListener("click", () => startOnlineGame("create", ""));
+document.getElementById("joinRoom").addEventListener("click", () => {
+  const code = roomCodeInput.value.trim().toUpperCase();
+  if (!/^[A-F0-9]{6}$/.test(code)) {
+    statusEl.textContent = "הזן קוד חדר בן שש אותיות או ספרות.";
+    return;
+  }
+  startOnlineGame("join", code);
+});
+document.getElementById("copyInvite").addEventListener("click", async () => {
+  inviteLinkInput.focus();
+  inviteLinkInput.select();
+  try {
+    await navigator.clipboard.writeText(inviteLinkInput.value);
+    onlineInfoText.textContent = "הקישור הועתק. שלח אותו לחבר!";
+  } catch (_) {
+    onlineInfoText.textContent = "סמן והעתק את הקישור שמופיע בתיבה.";
+  }
+});
+const invitedRoom = new URLSearchParams(location.search).get("room");
+if (invitedRoom && /^[A-F0-9]{6}$/i.test(invitedRoom)) {
+  roomCodeInput.value = invitedRoom.toUpperCase();
+  startOnlineGame("join", invitedRoom.toUpperCase());
+}
+</script>
+
+</body>
+</html>
