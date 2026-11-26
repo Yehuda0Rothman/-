@@ -1,0 +1,13 @@
+{
+  "name": "shach-online-server-tests",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/online-server.test.js"
+  },
+  "dependencies": {
+    "chess.js": "1.4.0",
+    "ws": "8.23.0"
+  }
+}
