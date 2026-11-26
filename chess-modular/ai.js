@@ -9,7 +9,7 @@
 //   2. alphaBeta()    — look several moves ahead (minimax with alpha-beta pruning)
 //   3. quiescence()   — follow captures and legal check evasions at the end of the search so we
 //                       don't stop in the middle of an exchange
-//   4. orderMoves()   — try captures first, which makes alpha-beta prune more
+//   4. orderMoves()   — try moves with the best resulting position evaluation first
 //   5. findBestMove() — iterative deepening: search depth 1, 2, 3, ... up to
 //                       the maximum depth selected by the player
 //
@@ -107,43 +107,33 @@ function evaluate(position) {
 
 // ---------------------------------------------------------------------
 // 4. Move ordering
-// Alpha-beta is fastest when good moves are tried first. A simple rule:
-// capture the most valuable piece with the least valuable attacker
-// (called MVV-LVA: "Most Valuable Victim, Least Valuable Attacker").
+// Try first the move whose resulting position has the best static evaluation.
 //
-// הסבר: סידור מהלכים. אלפא-בטא (שנלמד בהמשך) חוסך הרבה יותר עבודה
-// כשהוא בודק את המהלכים הטובים קודם. כלל אצבע פשוט: הכאות הן לרוב
-// מהלכים טובים, ועדיף "לאכול את הקורבן היקר ביותר בעזרת התוקף הזול
-// ביותר". למשל: רגלי שאוכל מלכה — מצוין! מלכה שאוכלת רגלי — פחות.
+// הסבר: סידור מהלכים לפי הערכת העמדה שתתקבל אחרי המהלך.
+// לכל מהלך:
+//   1. יוצרים את העמדה החדשה שמתקבלת אחרי ביצועו.
+//   2. evaluate() מחזירה ציון מנקודת המבט של מי שתורו בעמדה החדשה —
+//      כלומר, היריב. לכן הופכים את הסימן כדי לקבל ציון עבור השחקן
+//      שבחר את המהלך.
+//   3. מסדרים מהציון הגבוה לנמוך.
+// כך Alpha-Beta מתחיל בענף שנראה הטוב ביותר לפי הערכת העמדה הנוכחית,
+// ורק אחר כך עובר לשאר המהלכים. החיפוש המלא עדיין קובע את התוצאה;
+// ההערכה הזאת קובעת את סדר הבדיקה בלבד.
 // ---------------------------------------------------------------------
 
-// הסבר: נותנת לכל מהלך "ציון סידור" (לא ציון של העמדה, רק לקביעת הסדר):
-//   • אם יש הכאה: 10 כפול ערך הקורבן, פחות ערך התוקף.
-//     הכפל ב-10 מבטיח שהקורבן הוא הגורם החשוב, והתוקף רק "שובר שוויון".
-//   • אם יש הכתרה: מוסיפים את ערך הכלי החדש.
-//   • מהלך שקט רגיל: ציון 0 (ייבדק בסוף).
+// הסבר: ציון הסידור של מהלך הוא הערכת העמדה מיד לאחר ביצועו,
+// מנקודת המבט של השחקן שביצע את המהלך.
+// evaluate() מסתכלת מנקודת המבט של הצד שתורו בעמדה החדשה (היריב),
+// ולכן מכפילים במינוס 1 כדי להפוך לנקודת המבט שלנו.
 function moveOrderScore(position, move) {
-  let score = 0;
-  const attacker = position.board[move.fromRow][move.fromCol];
-  let victim = position.board[move.toRow][move.toCol];
-
-  // בהכאה דרך הילוכו משבצת היעד ריקה; הרגלי שנאכל נמצא ליד משבצת המוצא.
-  if (!victim && typeOf(attacker) === "P" && move.fromCol !== move.toCol) {
-    victim = position.board[move.fromRow][move.toCol];
-  }
-
-  if (victim) {
-    score += 10 * PIECE_VALUES[typeOf(victim)] - PIECE_VALUES[typeOf(attacker)];
-  }
-  if (move.promotion) score += PIECE_VALUES[move.promotion];
-  return score;
+  return -evaluate(makeMove(position, move));
 }
 
-// הסבר: ממיינת את רשימת המהלכים מהציון הגבוה לנמוך, בשלושה צעדים:
-//   1. map — עוטפים כל מהלך באובייקט שמכיל גם את הציון שלו.
-//   2. sort — ממיינים לפי הציון, מהגבוה לנמוך (b - a).
-//   3. map — מוציאים בחזרה רק את המהלכים עצמם.
-// (כך מחשבים את הציון פעם אחת לכל מהלך, ולא בכל השוואה של המיון.)
+// הסבר: ממיינת את רשימת המהלכים מהציון הגבוה לנמוך:
+//   1. map — שומרים לכל מהלך גם את ציון הסידור שלו.
+//   2. sort — המהלך עם הציון הגבוה ביותר עובר לראש הרשימה.
+//   3. map — מחזירים רק את המהלכים, בלי ציון העזר.
+// את הציון מחשבים פעם אחת לכל מהלך, ולא בכל השוואת מיון.
 function orderMoves(position, moves) {
   return moves
     .map(move => ({ move, score: moveOrderScore(position, move) }))
@@ -333,8 +323,7 @@ function findBestMove(position, maxDepth) {
     bestMove = result.move;
     completedDepth = depth;
 
-    // המהלך הטוב ביותר מהעומק הקודם נבדק ראשון בעומק הבא.
-    rootMoves = [bestMove, ...rootMoves.filter(move => move !== bestMove)];
+    // סדר המהלכים נשאר לפי הערכת העמדה שמתקבלת אחרי כל מהלך.
 
     // אם נמצא מט כפוי, אין צורך להמשיך לחפש.
     if (Math.abs(result.score) > MATE_SCORE - 1000) break;
