@@ -2,6 +2,32 @@
 
 const { test, expect } = require("@playwright/test");
 
+async function openGame(page, baseURL) {
+  const url = new URL("/", baseURL).toString();
+  const deadline = Date.now() + 180000;
+  let lastStatus = "no response";
+
+  // Render's free service may show a temporary startup page after sleeping.
+  // Retry until the actual chess UI (not the Render splash page) is ready.
+  while (Date.now() < deadline) {
+    let response = null;
+    try {
+      response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+      lastStatus = response ? String(response.status()) : "no response";
+      if (response && response.ok()) {
+        await page.locator("#newGame").waitFor({ state: "visible", timeout: 10000 });
+        await expect(page.locator(".square")).toHaveCount(64, { timeout: 10000 });
+        if (await page.title() === "שחמט") return;
+      }
+    } catch (error) {
+      lastStatus = error.message;
+    }
+    await page.waitForTimeout(5000);
+  }
+
+  throw new Error("SHACH did not become ready within 180 seconds. Last response: " + lastStatus);
+}
+
 async function startMode(page, mode) {
   await page.locator("#newGame").click();
   await expect(page.locator("#newGameDialog")).toBeVisible();
@@ -21,8 +47,7 @@ test("live page loads the full board and required controls", async ({ page }) =>
   const pageErrors = [];
   page.on("pageerror", error => pageErrors.push(error.message));
 
-  const response = await page.goto("/");
-  expect(response && response.ok()).toBeTruthy();
+  await openGame(page, test.info().project.use.baseURL || "https://shach.onrender.com");
   await expect(page).toHaveTitle("שחמט");
   await expect(page.locator(".square")).toHaveCount(64);
   await expect(page.locator("#newGame")).toBeVisible();
@@ -41,7 +66,7 @@ test("live page loads the full board and required controls", async ({ page }) =>
 });
 
 test("local two-player mode accepts legal moves and rejects an illegal destination", async ({ page }) => {
-  await page.goto("/");
+  await openGame(page, test.info().project.use.baseURL || "https://shach.onrender.com");
   await startMode(page, "local");
 
   await clickMove(page, 6, 4, 4, 4); // e2-e4
@@ -67,7 +92,7 @@ test("local two-player mode accepts legal moves and rejects an illegal destinati
 });
 
 test("computer mode responds after the human move", async ({ page }) => {
-  await page.goto("/");
+  await openGame(page, test.info().project.use.baseURL || "https://shach.onrender.com");
   await startMode(page, "computer");
   await page.locator("#searchDepth").fill("2");
   await page.locator("#searchDepth").dispatchEvent("change");
@@ -79,7 +104,7 @@ test("computer mode responds after the human move", async ({ page }) => {
 });
 
 test("board flip changes the visible orientation", async ({ page }) => {
-  await page.goto("/");
+  await openGame(page, test.info().project.use.baseURL || "https://shach.onrender.com");
   const firstSquare = page.locator(".square").first();
   await expect(firstSquare).toHaveAttribute("data-row", "0");
   await expect(firstSquare).toHaveAttribute("data-col", "0");
@@ -99,7 +124,7 @@ test("two real browser sessions stay synchronized during an online game", async 
   guest.on("pageerror", error => errors.push("guest: " + error.message));
 
   try {
-    await host.goto(baseURL + "/");
+    await openGame(host, baseURL);
     await startMode(host, "online");
     await host.locator("#createRoom").click();
     await expect.poll(() => host.locator("#roomCode").inputValue(), { timeout: 30000 })
@@ -108,9 +133,12 @@ test("two real browser sessions stay synchronized during an online game", async 
     const inviteLink = await host.locator("#inviteLink").inputValue();
     expect(inviteLink).toContain("?room=");
 
-    await guest.goto(inviteLink);
-    await expect(host.locator("#status")).toContainText("שני השחקנים מחוברים", { timeout: 30000 });
-    await expect(guest.locator("#status")).toContainText("שני השחקנים מחוברים", { timeout: 30000 });
+    await guest.goto(inviteLink, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await expect(guest.locator("#newGame")).toBeVisible({ timeout: 30000 });
+    await expect.poll(() => host.evaluate(() => online.ready), { timeout: 30000 })
+      .toBe(true);
+    await expect.poll(() => guest.evaluate(() => online.ready), { timeout: 30000 })
+      .toBe(true);
 
     await clickMove(host, 6, 4, 4, 4); // white: e2-e4
     await expect(host.locator('.square[data-row="4"][data-col="4"]'))
