@@ -281,7 +281,44 @@ class ChessPositionX88 {
   // מפתח לזיהוי חזרות. מסיר את רכיב שעון 50 המהלכים מה-hash,
   // כדי שאותה עמדה תזוהה גם כשהמונה התקדם.
   repetitionKey() {
-    return (this.hash ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)]) >>> 0;
+    let key = this.hash ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)];
+    // לפי חוקי השחמט, en-passant משנה את זהות העמדה רק אם אפשר לבצע אותו כחוק.
+    if (this.epSquare >= 0 && !this.hasLegalEnPassantCapture()) {
+      key ^= ZOBRIST.enPassant[this.epSquare + 1];
+    }
+    return key >>> 0;
+  }
+
+  // בודק אם קיים כלי רגלי שיכול לבצע הכאה דרך-הילוכו בלי להשאיר את המלך בשח.
+  hasLegalEnPassantCapture() {
+    if (this.epSquare < 0) return false;
+    const side = this.turn;
+    const pawn = side === 0 ? X88.PAWN : X88.PAWN + 6;
+    const capturedPawn = side === 0 ? X88.PAWN + 6 : X88.PAWN;
+    const direction = side === 0 ? -16 : 16;
+    const fromBase = this.epSquare - direction;
+
+    // במשבצת שמאחורי יעד ההכאה חייב להימצא הרגלי שאותו אמורים ללכוד.
+    if (!isBoardSquare(fromBase) || this.squares[fromBase] !== capturedPawn) return false;
+
+    const fromA = fromBase - 1;
+    if (isBoardSquare(fromA) && this.squares[fromA] === pawn) {
+      const undo = this.makeMove(encodeMove(fromA, this.epSquare));
+      let legal = false;
+      try { legal = !this.isInCheck(side); }
+      finally { this.unmakeMove(undo); }
+      if (legal) return true;
+    }
+
+    const fromB = fromBase + 1;
+    if (isBoardSquare(fromB) && this.squares[fromB] === pawn) {
+      const undo = this.makeMove(encodeMove(fromB, this.epSquare));
+      let legal = false;
+      try { legal = !this.isInCheck(side); }
+      finally { this.unmakeMove(undo); }
+      if (legal) return true;
+    }
+    return false;
   }
 
   // בודק אם משבצת מותקפת על ידי צד מסוים: רגלים, פרשים, מלכים,
@@ -541,8 +578,7 @@ class ChessPositionX88 {
       ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)]
       ^ ZOBRIST.side;
     this.epSquare = -1;
-    this.halfmoveClock += 1;
-    if (this.turn === 1) this.fullmoveNumber += 1;
+    // Null Move הוא מהלך מלאכותי לחיפוש, ולכן אינו מקדם את שעוני המשחק.
     this.turn ^= 1;
     hash ^= ZOBRIST.enPassant[0]
       ^ ZOBRIST.halfmove[Math.min(100, this.halfmoveClock)];
@@ -725,7 +761,8 @@ class ChessSearchEngineX88 {
     if (victim) {
       const victimValue = MATERIAL[((victim - 1) % 6) + 1];
       const attackerValue = MATERIAL[((moving - 1) % 6) + 1];
-      return 50000 + victimValue * 10 - attackerValue + promotion * 1000;
+      return 50000 + victimValue * 10 - attackerValue
+        + (promotion ? MATERIAL[PROMOTION_TYPE[promotion]] : 0);
     }
     if (promotion) return 60000 + MATERIAL[PROMOTION_TYPE[promotion]];
     const killerBase = ply * 2;
@@ -803,6 +840,24 @@ class ChessSearchEngineX88 {
     return count >= 2 && value >= 640;
   }
 
+  // מזהה תיקו פשוט של מלך מול מלך או מלך מול מלך וכלי קל יחיד.
+  // ברוב העמדות נעצרים מיד ברגלי/צריח/מלכה או בכלי הקל השני.
+  isInsufficientMaterial(position) {
+    let minors = 0;
+    for (let square = 0; square < 128; square += 1) {
+      if (square & 0x88) { square += 7; continue; }
+      const piece = position.squares[square];
+      if (!piece) continue;
+      const type = typeOf(piece);
+      if (type === X88.PAWN || type === X88.ROOK || type === X88.QUEEN) return false;
+      if (type === X88.KNIGHT || type === X88.BISHOP) {
+        minors += 1;
+        if (minors > 1) return false;
+      }
+    }
+    return true;
+  }
+
   // מוסיף מצב לנתיב החיפוש לצורך זיהוי חזרות.
   pushPath(key) {
     this.pathCounts.set(key, (this.pathCounts.get(key) || 0) + 1);
@@ -821,18 +876,34 @@ class ChessSearchEngineX88 {
     this.nodes += 1;
     this.checkTime();
     const inCheck = position.isInCheck();
-    if (!inCheck && position.halfmoveClock >= 100) return 0;
-    if (ply >= MAX_PLY - 1) return this.evaluate(position);
+    if (position.halfmoveClock >= 100) {
+      if (!inCheck) return 0;
+      return position.generateLegalMoves().length ? 0 : -MATE + ply;
+    }
+    if (this.isInsufficientMaterial(position)) {
+      if (inCheck && !position.generateLegalMoves().length) return -MATE + ply;
+      return 0;
+    }
+    if (ply >= MAX_PLY - 1) {
+      const legal = position.generateLegalMoves();
+      if (!legal.length) return inCheck ? -MATE + ply : 0;
+      return this.evaluate(position);
+    }
 
     const key = position.repetitionKey();
-    if ((this.pathCounts.get(key) || 0) >= 3) return 0;
+    if ((this.pathCounts.get(key) || 0) >= 3) {
+      if (!inCheck) return 0;
+      return position.generateLegalMoves().length ? 0 : -MATE + ply;
+    }
 
     let best = -INF;
     if (!inCheck) {
       best = this.evaluate(position);
-      if (best >= beta) return beta;
+      // לפני חיתוך beta מוודאים שאין כאן פט: בפט אין מהלך חוקי והציון חייב להיות 0.
+      if (best >= beta) return position.generateLegalMoves().length ? beta : 0;
       if (best > alpha) alpha = best;
-      if (qDepth >= 10) return best;
+      // גם במגבלת עומק Quiescence חייבים לזהות פט.
+      if (qDepth >= 10) return position.generateLegalMoves().length ? best : 0;
     }
 
     const moves = this.orderMoves(position,
@@ -872,9 +943,20 @@ class ChessSearchEngineX88 {
   negamax(position, depth, alpha, beta, ply, allowNull = true, checkExtensionBudget = 1) {
     this.nodes += 1;
     this.checkTime();
-    if (ply >= MAX_PLY - 1) return this.evaluate(position);
     const inCheck = position.isInCheck();
-    if (!inCheck && position.halfmoveClock >= 100) return 0;
+    if (position.halfmoveClock >= 100) {
+      if (!inCheck) return 0;
+      return position.generateLegalMoves().length ? 0 : -MATE + ply;
+    }
+    if (this.isInsufficientMaterial(position)) {
+      if (inCheck && !position.generateLegalMoves().length) return -MATE + ply;
+      return 0;
+    }
+    if (ply >= MAX_PLY - 1) {
+      const legal = position.generateLegalMoves();
+      if (!legal.length) return inCheck ? -MATE + ply : 0;
+      return this.evaluate(position);
+    }
     // הארכת שח מוגבלת לפעם אחת ברצף ורק כשהחיפוש קרוב לאופק.
     // בצומת שאינו בשח התקציב מתאפס; כך נמנעת הרחבה בלתי מוגבלת של רצפי שח.
     let childCheckExtensionBudget = inCheck ? checkExtensionBudget : 1;
@@ -1042,23 +1124,33 @@ class ChessSearchEngineX88 {
     this.pathCounts.clear();
     const rootKey = position.repetitionKey();
     let rootAddedToPath = false;
-    let rootFoundInHistory = false;
+    let rootIsLastInHistory = false;
     if (Array.isArray(gameHistory)) {
-      for (const fen of gameHistory) {
+      for (let index = 0; index < gameHistory.length; index += 1) {
+        const fen = gameHistory[index];
         if (typeof fen !== "string") continue;
         const historyKey = new ChessPositionX88(fen).repetitionKey();
         this.pushPath(historyKey);
-        if (historyKey === rootKey) rootFoundInHistory = true;
+        if (index === gameHistory.length - 1 && historyKey === rootKey) rootIsLastInHistory = true;
       }
     }
-    if (!rootFoundInHistory) {
+    // ההיסטוריה של המשחק אמורה להסתיים בעמדה הנוכחית; אם לא, מוסיפים אותה פעם אחת.
+    if (!rootIsLastInHistory) {
       this.pushPath(rootKey);
       rootAddedToPath = true;
     }
 
     const rootMoves = preparedRootMoves || position.generateLegalMoves();
-    if (!rootMoves.length) {
-      return { move: -1, score: position.isInCheck() ? -MATE : 0, depth: 0, nodes: this.nodes };
+    const rootIsDraw = position.halfmoveClock >= 100
+      || this.isInsufficientMaterial(position)
+      || (this.pathCounts.get(rootKey) || 0) >= 3;
+    if (!rootMoves.length || rootIsDraw) {
+      const score = !rootMoves.length && position.isInCheck() ? -MATE : 0;
+      if (rootAddedToPath) this.popPath(rootKey);
+      return {
+        move: -1, uci: null, score, depth: 0, nodes: this.nodes,
+        timeMs: Math.round(now() - this.startedAt)
+      };
     }
     if (this.bestMove < 0) this.bestMove = rootMoves[0];
 
@@ -1204,7 +1296,8 @@ async function preparePonder(fen, history) {
           const result = branch.engine.search(board, branch.history, true, branch.moves);
           branch.nodes += result.nodes;
           branch.result = result;
-          if (branch.engine.completedDepth >= 64 || Math.abs(branch.engine.bestScore) >= MATE - 128) {
+          if (result.move < 0 || branch.engine.completedDepth >= 64
+            || Math.abs(branch.engine.bestScore) >= MATE - 128) {
             branch.done = true;
             unfinished -= 1;
           }
@@ -1305,7 +1398,11 @@ function clearSelection() {
 
 // מפתח חזרה: פריסת הכלים, הצד שבתור, זכויות הצרחה ו-en-passant.
 function repetitionKey(fen) {
-  return fen.split(" ").slice(0, 4).join(" ");
+  const fields = String(fen).split(" ");
+  if (fields.length < 4 || fields[3] === "-") return fields.slice(0, 4).join(" ");
+  const board = new ChessPositionX88(fen);
+  if (!board.hasLegalEnPassantCapture()) board.epSquare = -1;
+  return board.toFEN().split(" ").slice(0, 4).join(" ");
 }
 
 function insufficientMaterial() {
