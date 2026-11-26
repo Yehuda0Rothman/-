@@ -19,34 +19,39 @@
 
   <div class="layout">
     <!-- Left/right column: the board and its buttons -->
-    <section class="panel">
-      <div id="board" role="grid" aria-label="לוח שחמט"></div>
-
-      <div class="controls">
-        <button id="newGame" class="action primary">משחק חדש</button>
-        <button id="undo" class="action" disabled>בטל תור</button>
-        <button id="flip" class="action">הפוך לוח</button>
-        <button id="resign" class="action">כניעה</button>
+    <section class="panel board-panel">
+      <div class="board-stage">
+        <div id="board" role="grid" aria-label="לוח שחמט"></div>
       </div>
 
-      <div class="online-tools">
-        <div class="controls">
-          <button id="createRoom" class="action primary">צור חדר אונליין</button>
-          <input id="roomCode" type="text" maxlength="6" placeholder="קוד חדר" aria-label="קוד חדר">
-          <button id="joinRoom" class="action">הצטרף לחדר</button>
+      <!-- הכפתורים נמצאים בעמודה צמודה ללוח, ולא מתחתיו. -->
+      <div class="board-actions">
+        <div class="controls main-controls">
+          <button id="newGame" class="action primary">משחק חדש</button>
+          <button id="undo" class="action" disabled>בטל תור</button>
+          <button id="flip" class="action">הפוך לוח</button>
+          <button id="resign" class="action">כניעה</button>
         </div>
-        <div id="onlineInfo" class="online-info" hidden>
-          <span id="onlineInfoText"></span>
-          <div class="controls">
-            <input id="inviteLink" type="text" readonly aria-label="קישור הזמנה">
-            <button id="copyInvite" class="action">העתק קישור</button>
+
+        <div class="online-tools">
+          <div class="controls online-controls">
+            <button id="createRoom" class="action primary">צור חדר אונליין</button>
+            <input id="roomCode" type="text" maxlength="6" placeholder="קוד חדר" aria-label="קוד חדר">
+            <button id="joinRoom" class="action">הצטרף לחדר</button>
+          </div>
+          <div id="onlineInfo" class="online-info" hidden>
+            <span id="onlineInfoText"></span>
+            <div class="controls">
+              <input id="inviteLink" type="text" readonly aria-label="קישור הזמנה">
+              <button id="copyInvite" class="action">העתק קישור</button>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- Other column: status, settings, statistics, move list -->
-    <aside class="panel">
+    <aside class="panel info-panel">
       <div id="status" class="status" aria-live="polite"></div>
 
       <div class="setting">
