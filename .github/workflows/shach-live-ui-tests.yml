@@ -1,0 +1,46 @@
+name: SHACH live browser tests
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "chess-v31/live-ui-tests/**"
+      - ".github/workflows/shach-live-ui-tests.yml"
+  pull_request:
+    paths:
+      - "chess-v31/live-ui-tests/**"
+      - ".github/workflows/shach-live-ui-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: chess-v31/live-ui-tests
+    env:
+      SHACH_BASE_URL: https://shach.onrender.com
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install test dependencies
+        run: npm install --no-package-lock
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run live browser tests
+        run: npm test
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shach-live-playwright-report
+          path: chess-v31/live-ui-tests/test-results/
+          if-no-files-found: ignore
