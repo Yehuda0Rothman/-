@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: shach
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
