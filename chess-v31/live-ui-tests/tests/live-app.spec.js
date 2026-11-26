@@ -204,8 +204,11 @@ test("three consecutive online rooms synchronize both players in real browsers",
       await guest.goto(inviteLink, { waitUntil: "domcontentloaded", timeout: 30000 });
       await expect(guest.locator("#newGame")).toBeVisible({ timeout: 30000 });
       await expect(guest.locator("#status")).toContainText("קיבלת הזמנה");
+      await expect(guest.locator("#newGameDialog")).not.toBeVisible();
       expect(await guest.evaluate(() => online.active)).toBe(false);
       expect(await guest.evaluate(() => game.started)).toBe(false);
+      expect(await guest.locator("#roomCode").inputValue())
+        .toBe(await host.locator("#roomCode").inputValue());
 
       // The invitation only fills the room code. The guest must explicitly join.
       await guest.locator("#newGame").click();
