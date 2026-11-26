@@ -17,7 +17,11 @@ async function openGame(page, baseURL) {
       if (response && response.ok()) {
         await page.locator("#newGame").waitFor({ state: "visible", timeout: 10000 });
         await expect(page.locator(".square")).toHaveCount(64, { timeout: 10000 });
-        if (await page.title() === "שחמט") return;
+        const waitingForStart = await page.evaluate(() =>
+          document.querySelectorAll(".square:disabled").length === 64 &&
+          document.querySelector("#status")?.textContent.includes("משחק חדש")
+        );
+        if (await page.title() === "שחמט" && waitingForStart) return;
       }
     } catch (error) {
       lastStatus = error.message;
