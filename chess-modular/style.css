@@ -1,0 +1,321 @@
+/* =====================================================================
+   style.css — how the page looks
+   ===================================================================== */
+
+/* Colors used throughout the page (CSS variables). */
+:root {
+  color-scheme: dark;
+  --panel: #1b2635;
+  --panel-dark: #141e2b;
+  --line: #34465d;
+  --text: #edf3fb;
+  --muted: #aab9ca;
+  --gold: #e6bd72;
+  --light-square: #e9d6b4;
+  --dark-square: #8a674b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #243348 0, #111722 55%);
+  color: var(--text);
+  font-family: Arial, "Noto Sans Hebrew", sans-serif;
+}
+
+/* ---------- Page layout ---------- */
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(25px, 4vw, 38px);
+  color: var(--gold);
+}
+
+.subtitle {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+/* Two columns: board on one side, info panel on the other. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 640px) minmax(240px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.panel {
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px #0004;
+}
+
+/* ---------- The board: an 8x8 CSS grid ---------- */
+
+#board {
+  width: 100%;
+  aspect-ratio: 1;                       /* always square */
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  direction: ltr;                        /* file "a" on the left even in a Hebrew page */
+  border: 5px solid #443629;
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px #0005;
+}
+
+.square {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+.square.light { background: var(--light-square); }
+.square.dark  { background: var(--dark-square); }
+
+/* Highlights */
+.square.selected {
+  box-shadow: inset 0 0 0 5px #f2c14e;
+}
+
+.square.last-move {
+  background-image: linear-gradient(#f5d35d66, #f5d35d66);
+}
+
+/* A dot on empty squares the selected piece can move to. */
+.square.legal-target::after {
+  content: "";
+  position: absolute;
+  width: 23%;
+  height: 23%;
+  border-radius: 50%;
+  background: #263a4c70;
+}
+
+/* A ring on enemy pieces the selected piece can capture. */
+.square.capture-target::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 5px solid #d84f4f9c;
+  border-radius: 50%;
+}
+
+/* ---------- Pieces and coordinates ---------- */
+
+.piece {
+  z-index: 1;
+  font-size: clamp(25px, 6.3vw, 65px);
+  line-height: 1;
+  user-select: none;
+}
+
+.white-piece {
+  color: #fff9e9;
+  text-shadow: 0 2px 3px #2e2419, 0 0 2px #30251a;
+}
+
+.black-piece {
+  color: #202630;
+  text-shadow: 0 1px 1px #fff5;
+}
+
+.coordinate {
+  position: absolute;
+  z-index: 2;
+  font-size: clamp(9px, 1.4vw, 13px);
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.file-coordinate { right: 4px; bottom: 2px; }
+.rank-coordinate { left: 4px; top: 2px; }
+.light .coordinate { color: #795b40; }
+.dark .coordinate  { color: #f3dfc4; }
+
+/* ---------- Buttons and inputs ---------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+button.action {
+  padding: 10px 13px;
+  background: #29394c;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button.action.primary {
+  background: var(--gold);
+  color: #20202a;
+  border-color: var(--gold);
+}
+
+button.action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+input {
+  width: 115px;
+  padding: 9px;
+  background: #121b27;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+/* ---------- Side panel ---------- */
+
+.status {
+  min-height: 45px;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: var(--panel-dark);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  line-height: 1.5;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.stat {
+  padding: 9px;
+  background: var(--panel-dark);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.stat span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stat strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--gold);
+  font-size: 18px;
+}
+
+.moves {
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px;
+  background: var(--panel-dark);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.move-row {
+  display: grid;
+  grid-template-columns: 35px 1fr 1fr;
+  padding: 6px 4px;
+  border-bottom: 1px solid #293849;
+  direction: ltr;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.move-number {
+  color: var(--muted);
+}
+
+details {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+summary {
+  color: var(--gold);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* ---------- Online play ---------- */
+
+.online-tools input {
+  max-width: 130px;
+}
+
+.online-info {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--panel-dark);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  line-height: 1.5;
+}
+
+.online-info[hidden] {
+  display: none;
+}
+
+.online-info input {
+  width: min(100%, 340px);
+  max-width: none;
+  direction: ltr;
+  text-align: left;
+}
+
+/* ---------- Small screens: one column ---------- */
+
+@media (max-width: 800px) {
+  main { padding: 12px; }
+  header { flex-direction: column; align-items: flex-start; }
+  .layout { grid-template-columns: 1fr; }
+  .panel { padding: 12px; }
+  .piece { font-size: clamp(25px, 9vw, 58px); }
+}
