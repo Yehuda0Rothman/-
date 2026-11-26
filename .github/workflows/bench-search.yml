@@ -1,0 +1,28 @@
+name: Isolated chess search comparison
+
+on:
+  push:
+    branches:
+      - benchmark-id-vs-direct
+    paths:
+      - bench-search.js
+      - .github/workflows/bench-search.yml
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run fixed-depth and iterative-deepening benchmark
+        run: node bench-search.js | tee bench-results.txt
+      - name: Save raw results
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-search-benchmark
+          path: bench-results.txt
