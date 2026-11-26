@@ -35,10 +35,10 @@ body {
 
 main {
   width: 100%;
-  max-width: 1600px;
+  max-width: 1800px;
   height: 100dvh;
   margin: 0 auto;
-  padding: 10px 16px 12px;
+  padding: 6px 10px 8px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -46,8 +46,8 @@ main {
 
 header {
   flex: 0 0 auto;
-  min-height: 44px;
-  margin-bottom: 10px;
+  min-height: 36px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -73,8 +73,8 @@ h1 {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(255px, 310px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(205px, 230px);
+  gap: 10px;
   align-items: stretch;
   overflow: hidden;
 }
@@ -82,7 +82,7 @@ h1 {
 .panel {
   min-width: 0;
   min-height: 0;
-  padding: 12px;
+  padding: 8px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -93,9 +93,9 @@ h1 {
 
 .board-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(145px, 185px);
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 132px);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .board-stage {
@@ -108,14 +108,14 @@ h1 {
 }
 
 #board {
-  width: min(100%, calc(100dvh - 112px));
+  width: min(100%, calc(100dvh - 74px));
   max-height: 100%;
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
   grid-template-rows: repeat(8, minmax(0, 1fr));
   direction: ltr;
-  border: 5px solid #443629;
+  border: 4px solid #443629;
   border-radius: 9px;
   overflow: hidden;
   box-shadow: 0 12px 30px #0005;
@@ -158,7 +158,7 @@ h1 {
 
 .piece {
   z-index: 1;
-  font-size: clamp(25px, 5.7vw, 65px);
+  font-size: clamp(25px, 7.8vmin, 92px);
   line-height: 1;
   user-select: none;
 }
@@ -176,7 +176,7 @@ h1 {
 .coordinate {
   position: absolute;
   z-index: 2;
-  font-size: clamp(9px, 1.2vw, 13px);
+  font-size: clamp(9px, 1.5vmin, 16px);
   font-weight: bold;
   pointer-events: none;
 }
@@ -192,13 +192,13 @@ h1 {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
   margin-top: 0;
 }
 
@@ -211,8 +211,8 @@ h1 {
 
 button.action {
   width: 100%;
-  min-height: 38px;
-  padding: 8px 9px;
+  min-height: 36px;
+  padding: 6px 7px;
   background: #29394c;
   color: var(--text);
   border: 1px solid var(--line);
@@ -237,8 +237,8 @@ button.action:disabled {
 input {
   width: 100%;
   min-width: 0;
-  height: 38px;
-  padding: 8px 9px;
+  height: 36px;
+  padding: 6px 7px;
   background: #121b27;
   color: var(--text);
   border: 1px solid var(--line);
@@ -255,7 +255,7 @@ input {
 
 .online-info {
   margin-top: 9px;
-  padding: 9px;
+  padding: 7px;
   background: var(--panel-dark);
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -288,9 +288,9 @@ input {
 
 .status {
   flex: 0 0 auto;
-  min-height: 40px;
-  margin-bottom: 8px;
-  padding: 9px 10px;
+  min-height: 36px;
+  margin-bottom: 6px;
+  padding: 7px 8px;
   background: var(--panel-dark);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -300,7 +300,7 @@ input {
 
 .setting {
   flex: 0 0 auto;
-  margin: 8px 0;
+  margin: 6px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -312,13 +312,13 @@ input {
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin: 6px 0 8px;
+  gap: 5px;
+  margin: 4px 0 6px;
 }
 
 .stat {
   min-width: 0;
-  padding: 7px 4px;
+  padding: 5px 3px;
   background: var(--panel-dark);
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -340,7 +340,7 @@ input {
 
 h3 {
   flex: 0 0 auto;
-  margin: 5px 0 7px;
+  margin: 3px 0 5px;
   font-size: 16px;
 }
 
@@ -370,8 +370,8 @@ h3 {
 
 details {
   flex: 0 0 auto;
-  max-height: 105px;
-  margin-top: 8px;
+  max-height: 80px;
+  margin-top: 6px;
   padding-top: 7px;
   border-top: 1px solid var(--line);
   color: var(--muted);
@@ -380,7 +380,7 @@ details {
   overflow: auto;
 }
 
-details[open] { max-height: 140px; }
+details[open] { max-height: 110px; }
 
 summary {
   color: var(--gold);
@@ -391,22 +391,22 @@ summary {
 /* ---------- התאמה לחלונות צרים ---------- */
 
 @media (max-width: 900px) {
-  .layout { grid-template-columns: minmax(0, 1fr) 245px; gap: 10px; }
-  .board-panel { grid-template-columns: minmax(0, 1fr) 132px; gap: 9px; padding: 9px; }
-  .board-actions { gap: 10px; }
-  button.action { font-size: 13px; padding-inline: 6px; }
-  .panel { padding: 9px; }
+  .layout { grid-template-columns: minmax(0, 1fr) 205px; gap: 8px; }
+  .board-panel { grid-template-columns: minmax(0, 1fr) 116px; gap: 7px; padding: 7px; }
+  .board-actions { gap: 8px; }
+  button.action { font-size: 12px; padding-inline: 5px; }
+  .panel { padding: 7px; }
 }
 
 @media (max-height: 650px) and (min-width: 761px) {
-  main { padding-block: 6px; }
-  header { min-height: 36px; margin-bottom: 6px; }
+  main { padding-block: 4px 6px; }
+  header { min-height: 32px; margin-bottom: 4px; }
   h1 { font-size: 23px; }
   .subtitle { font-size: 12px; }
-  .panel { padding: 8px; }
-  .board-panel { gap: 8px; }
-  .board-actions { gap: 8px; }
-  button.action { min-height: 33px; padding-block: 5px; }
+  .panel { padding: 6px; }
+  .board-panel { gap: 6px; }
+  .board-actions { gap: 6px; }
+  button.action { min-height: 31px; padding-block: 4px; }
   .status { min-height: 34px; padding: 6px 8px; }
   .setting { margin: 5px 0; }
   .stats { margin: 4px 0 5px; }
@@ -421,7 +421,7 @@ summary {
   .layout { grid-template-columns: minmax(0, 1fr); overflow: visible; }
   .board-panel { grid-template-columns: minmax(0, 1fr); }
   .board-stage { height: auto; }
-  #board { width: min(100%, calc(100vw - 48px)); max-height: none; }
+  #board { width: min(100%, calc(100vw - 36px)); max-height: none; }
   .board-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .main-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .online-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
