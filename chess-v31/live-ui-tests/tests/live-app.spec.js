@@ -98,6 +98,24 @@ test("live page loads the full board and required controls", async ({ page }) =>
   await expect(page.locator("#whiteClock")).toBeVisible();
   await expect(page.locator("#blackClock")).toBeVisible();
 
+  const idleState = await page.evaluate(() => ({
+    started: game.started,
+    online: online.active,
+    clockRunning: game.clock.running,
+    whiteClock: document.querySelector("#whiteClock").textContent,
+    blackClock: document.querySelector("#blackClock").textContent
+  }));
+  expect(idleState).toEqual({
+    started: false,
+    online: false,
+    clockRunning: false,
+    whiteClock: "—",
+    blackClock: "—"
+  });
+  await expect(page.locator(".square:disabled")).toHaveCount(64);
+  await expect(page.locator("#resign")).toBeDisabled();
+  await expect(page.locator("#status")).toContainText("משחק חדש");
+
   const stylesheet = await page.evaluate(() => {
     const link = document.querySelector('link[rel="stylesheet"]');
     return link && link.sheet !== null;
@@ -181,6 +199,16 @@ test("three consecutive online rooms synchronize both players in real browsers",
 
       await guest.goto(inviteLink, { waitUntil: "domcontentloaded", timeout: 30000 });
       await expect(guest.locator("#newGame")).toBeVisible({ timeout: 30000 });
+      await expect(guest.locator("#status")).toContainText("קיבלת הזמנה");
+      expect(await guest.evaluate(() => online.active)).toBe(false);
+      expect(await guest.evaluate(() => game.started)).toBe(false);
+
+      // The invitation only fills the room code. The guest must explicitly join.
+      await guest.locator("#newGame").click();
+      await expect(guest.locator("#newGameDialog")).toBeVisible();
+      await expect(guest.locator("#gameMode")).toHaveValue("online");
+      await expect(guest.locator("#roomCode")).toHaveValue(await host.locator("#roomCode").inputValue());
+      await guest.locator("#joinRoom").click();
 
       try {
         await expect.poll(async () => {
