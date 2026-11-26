@@ -1,6 +1,7 @@
 services:
   - type: web
     name: shach
+    repo: https://github.com/Yehuda0Rothman/-
     runtime: node
     plan: free
     region: frankfurt
