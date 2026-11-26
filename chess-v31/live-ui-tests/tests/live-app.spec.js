@@ -43,6 +43,47 @@ async function clickMove(page, fromRow, fromCol, toRow, toCol) {
   await page.locator(`.square[data-row="${toRow}"][data-col="${toCol}"]`).click();
 }
 
+function watchOnlineSocket(page, label, events) {
+  page.on("websocket", ws => {
+    events.push({ side:label, event:"opened", url:ws.url() });
+    ws.on("framesent", frame => events.push({
+      side:label, event:"sent", ...summarizeSocketFrame(frame.payload)
+    }));
+    ws.on("framereceived", frame => events.push({
+      side:label, event:"received", ...summarizeSocketFrame(frame.payload)
+    }));
+    ws.on("close", () => events.push({ side:label, event:"closed" }));
+    ws.on("socketerror", error => events.push({ side:label, event:"socket-error", message:error }));
+  });
+}
+
+function summarizeSocketFrame(payload) {
+  try {
+    const message = JSON.parse(typeof payload === "string" ? payload : payload.toString());
+    // Do not record authentication tokens, room codes, FENs, or move data.
+    return {
+      type:message.type,
+      ready:message.ready,
+      color:message.color,
+      hasFen:Boolean(message.fen),
+      message:message.message
+    };
+  } catch (_) {
+    return { type:"unparsed-frame" };
+  }
+}
+
+async function onlineClientState(page) {
+  return page.evaluate(() => ({
+    active:online.active,
+    ready:online.ready,
+    color:online.color,
+    socketState:typeof socket === "undefined" || !socket ? null : socket.readyState,
+    status:document.querySelector("#status")?.textContent || "",
+    moveCount:document.querySelectorAll("#moves .move-notation").length
+  }));
+}
+
 test("live page loads the full board and required controls", async ({ page }) => {
   const pageErrors = [];
   page.on("pageerror", error => pageErrors.push(error.message));
@@ -114,49 +155,67 @@ test("board flip changes the visible orientation", async ({ page }) => {
   await expect(page.locator(".square").first()).toHaveAttribute("data-col", "7");
 });
 
-test("two real browser sessions stay synchronized during an online game", async ({ browser, baseURL }) => {
-  const hostContext = await browser.newContext();
-  const guestContext = await browser.newContext();
-  const host = await hostContext.newPage();
-  const guest = await guestContext.newPage();
-  const errors = [];
-  host.on("pageerror", error => errors.push("host: " + error.message));
-  guest.on("pageerror", error => errors.push("guest: " + error.message));
+test("three consecutive online rooms synchronize both players in real browsers", async ({ browser, baseURL }) => {
+  for (let trial = 1; trial <= 3; trial++) {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+    const errors = [];
+    const socketEvents = [];
 
-  try {
-    await openGame(host, baseURL);
-    await startMode(host, "online");
-    await host.locator("#createRoom").click();
-    await expect.poll(() => host.locator("#roomCode").inputValue(), { timeout: 30000 })
-      .toMatch(/^[A-F0-9]{6}$/);
+    host.on("pageerror", error => errors.push("host: " + error.message));
+    guest.on("pageerror", error => errors.push("guest: " + error.message));
+    watchOnlineSocket(host, "host", socketEvents);
+    watchOnlineSocket(guest, "guest", socketEvents);
 
-    const inviteLink = await host.locator("#inviteLink").inputValue();
-    expect(inviteLink).toContain("?room=");
+    try {
+      await openGame(host, baseURL);
+      await startMode(host, "online");
+      await host.locator("#createRoom").click();
+      await expect.poll(() => host.locator("#roomCode").inputValue(), { timeout: 30000 })
+        .toMatch(/^[A-F0-9]{6}$/);
 
-    await guest.goto(inviteLink, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await expect(guest.locator("#newGame")).toBeVisible({ timeout: 30000 });
-    await expect.poll(() => host.evaluate(() => online.ready), { timeout: 30000 })
-      .toBe(true);
-    await expect.poll(() => guest.evaluate(() => online.ready), { timeout: 30000 })
-      .toBe(true);
+      const inviteLink = await host.locator("#inviteLink").inputValue();
+      expect(inviteLink).toContain("?room=");
 
-    await clickMove(host, 6, 4, 4, 4); // white: e2-e4
-    await expect(host.locator('.square[data-row="4"][data-col="4"]'))
-      .toHaveAttribute("aria-label", /e4, רגלי לבן/);
-    await expect(guest.locator('.square[data-row="4"][data-col="4"]'))
-      .toHaveAttribute("aria-label", /e4, רגלי לבן/, { timeout: 15000 });
+      await guest.goto(inviteLink, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await expect(guest.locator("#newGame")).toBeVisible({ timeout: 30000 });
 
-    await clickMove(guest, 1, 4, 3, 4); // black: e7-e5
-    await expect(guest.locator('.square[data-row="3"][data-col="4"]'))
-      .toHaveAttribute("aria-label", /e5, רגלי שחור/);
-    await expect(host.locator('.square[data-row="3"][data-col="4"]'))
-      .toHaveAttribute("aria-label", /e5, רגלי שחור/, { timeout: 15000 });
+      try {
+        await expect.poll(async () => {
+          const hostReady = await host.evaluate(() => online.ready);
+          const guestReady = await guest.evaluate(() => online.ready);
+          return hostReady && guestReady;
+        }, { timeout: 30000 }).toBe(true);
+      } catch (error) {
+        const hostState = await onlineClientState(host);
+        const guestState = await onlineClientState(guest);
+        throw new Error(
+          "Online room " + trial + " did not synchronize. " +
+          JSON.stringify({ hostState, guestState, socketEvents, pageErrors:errors }) +
+          "\n" + error.message
+        );
+      }
 
-    await expect(host.locator("#moves .move-notation")).toHaveCount(2);
-    await expect(guest.locator("#moves .move-notation")).toHaveCount(2);
-    expect(errors).toEqual([]);
-  } finally {
-    await hostContext.close();
-    await guestContext.close();
+      await clickMove(host, 6, 4, 4, 4); // white: e2-e4
+      await expect(host.locator('.square[data-row="4"][data-col="4"]'))
+        .toHaveAttribute("aria-label", /e4, רגלי לבן/);
+      await expect(guest.locator('.square[data-row="4"][data-col="4"]'))
+        .toHaveAttribute("aria-label", /e4, רגלי לבן/, { timeout: 15000 });
+
+      await clickMove(guest, 1, 4, 3, 4); // black: e7-e5
+      await expect(guest.locator('.square[data-row="3"][data-col="4"]'))
+        .toHaveAttribute("aria-label", /e5, רגלי שחור/);
+      await expect(host.locator('.square[data-row="3"][data-col="4"]'))
+        .toHaveAttribute("aria-label", /e5, רגלי שחור/, { timeout: 15000 });
+
+      await expect(host.locator("#moves .move-notation")).toHaveCount(2);
+      await expect(guest.locator("#moves .move-notation")).toHaveCount(2);
+      expect(errors).toEqual([]);
+    } finally {
+      await hostContext.close();
+      await guestContext.close();
+    }
   }
 });
