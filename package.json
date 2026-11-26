@@ -1,0 +1,9 @@
+{
+  "name": "shach-host",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small Node.js host for the standalone V31 chess game",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
