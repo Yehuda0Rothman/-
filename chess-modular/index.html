@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151b28">
+  <title>שחמט — משחק נגד המחשב ואונליין</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>שחמט</h1>
+      <div class="subtitle">מנוע Alpha-Beta עם העמקה הדרגתית</div>
+    </div>
+    <div id="modeLabel" class="subtitle">אתה משחק בלבן · המחשב בשחור</div>
+  </header>
+
+  <div class="layout">
+    <!-- Left/right column: the board and its buttons -->
+    <section class="panel">
+      <div id="board" role="grid" aria-label="לוח שחמט"></div>
+
+      <div class="controls">
+        <button id="newGame" class="action primary">משחק חדש</button>
+        <button id="undo" class="action" disabled>בטל תור</button>
+        <button id="flip" class="action">הפוך לוח</button>
+        <button id="resign" class="action">כניעה</button>
+      </div>
+
+      <div class="online-tools">
+        <div class="controls">
+          <button id="createRoom" class="action primary">צור חדר אונליין</button>
+          <input id="roomCode" type="text" maxlength="6" placeholder="קוד חדר" aria-label="קוד חדר">
+          <button id="joinRoom" class="action">הצטרף לחדר</button>
+        </div>
+        <div id="onlineInfo" class="online-info" hidden>
+          <span id="onlineInfoText"></span>
+          <div class="controls">
+            <input id="inviteLink" type="text" readonly aria-label="קישור הזמנה">
+            <button id="copyInvite" class="action">העתק קישור</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Other column: status, settings, statistics, move list -->
+    <aside class="panel">
+      <div id="status" class="status" aria-live="polite"></div>
+
+      <div class="setting">
+        <label for="searchDepth">עומק חיפוש (חצאי־מהלכים)</label>
+        <input id="searchDepth" type="number" min="1" max="20" step="1" value="5">
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>עומק</span><strong id="depth">—</strong></div>
+        <div class="stat"><span>צמתים</span><strong id="nodes">—</strong></div>
+        <div class="stat"><span>זמן</span><strong id="elapsed">—</strong></div>
+      </div>
+
+      <h3>מהלכים</h3>
+      <div id="moves" class="moves" aria-label="היסטוריית מהלכים"></div>
+
+      <details>
+        <summary>איך המחשב בוחר מהלך?</summary>
+        <p><b>הערכת עמדה:</b> כל כלי מקבל ערך (רגלי 100, פרש 320, רץ 330, צריח 500, מלכה 900), ועוד בונוס קטן לפרשים ורצים במרכז ולרגלים שהתקדמו.</p>
+        <p><b>Minimax / Negamax:</b> המחשב בודק את כל המהלכים שלו, את כל התגובות של היריב, וכן הלאה, ומניח שכל צד בוחר את המהלך הטוב ביותר עבורו.</p>
+        <p><b>Alpha-Beta:</b> אם כבר ברור שענף מסוים גרוע ממה שנמצא קודם, מפסיקים לבדוק אותו.</p>
+        <p><b>Quiescence:</b> בסוף החיפוש ממשיכים לבדוק לכידות, כדי לא לעצור באמצע חילוף כלים.</p>
+        <p><b>העמקה הדרגתית:</b> מחפשים בעומק 1, אחר כך 2, 3… עד לעומק שהוגדר, ומשתמשים בתוצאה של העומק האחרון שהושלם.</p>
+      </details>
+    </aside>
+  </div>
+</main>
+
+<!-- Order matters: each file uses functions from the files above it. -->
+<script src="chess-rules.js"></script>
+<script src="ai.js"></script>
+<script src="game.js"></script>
+<script src="online.js"></script>
+</body>
+</html>
