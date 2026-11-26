@@ -1,8 +1,7 @@
 /* =====================================================================
-   style.css — how the page looks
+   style.css — פריסה מלאה למסך, לוח וכפתורים זה לצד זה
    ===================================================================== */
 
-/* Colors used throughout the page (CSS variables). */
 :root {
   color-scheme: dark;
   --panel: #1b2635;
@@ -15,70 +14,107 @@
   --dark-square: #8a674b;
 }
 
-* {
-  box-sizing: border-box;
+* { box-sizing: border-box; }
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* במחשב כל ממשק המשחק נמצא בתוך גובה המסך. */
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
+  min-height: 0;
   background: radial-gradient(circle at top, #243348 0, #111722 55%);
   color: var(--text);
   font-family: Arial, "Noto Sans Hebrew", sans-serif;
 }
 
-/* ---------- Page layout ---------- */
+/* ---------- מסגרת הדף והחלוקה הראשית ---------- */
 
 main {
-  max-width: 1100px;
+  width: 100%;
+  max-width: 1600px;
+  height: 100dvh;
   margin: 0 auto;
-  padding: 24px;
+  padding: 10px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 header {
+  flex: 0 0 auto;
+  min-height: 44px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
 }
 
 h1 {
   margin: 0;
-  font-size: clamp(25px, 4vw, 38px);
   color: var(--gold);
+  font-size: clamp(23px, 2.4vw, 32px);
+  line-height: 1.15;
 }
 
 .subtitle {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--muted);
+  font-size: 14px;
 }
 
-/* Two columns: board on one side, info panel on the other. */
+/* עמודה אחת ללוח ולכפתורים, ועמודה שנייה למידע. */
 .layout {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, 640px) minmax(240px, 1fr);
-  gap: 20px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(255px, 310px);
+  gap: 14px;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .panel {
-  padding: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: 0 18px 50px #0004;
 }
 
-/* ---------- The board: an 8x8 CSS grid ---------- */
+/* ---------- אזור הלוח והכפתורים הצמודים אליו ---------- */
+
+.board-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(145px, 185px);
+  align-items: center;
+  gap: 12px;
+}
+
+.board-stage {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
 
 #board {
-  width: 100%;
-  aspect-ratio: 1;                       /* always square */
+  width: min(100%, calc(100dvh - 112px));
+  max-height: 100%;
+  aspect-ratio: 1;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
-  direction: ltr;                        /* file "a" on the left even in a Hebrew page */
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  direction: ltr;
   border: 5px solid #443629;
   border-radius: 9px;
   overflow: hidden;
@@ -98,18 +134,11 @@ h1 {
 }
 
 .square.light { background: var(--light-square); }
-.square.dark  { background: var(--dark-square); }
+.square.dark { background: var(--dark-square); }
 
-/* Highlights */
-.square.selected {
-  box-shadow: inset 0 0 0 5px #f2c14e;
-}
+.square.selected { box-shadow: inset 0 0 0 5px #f2c14e; }
+.square.last-move { background-image: linear-gradient(#f5d35d66, #f5d35d66); }
 
-.square.last-move {
-  background-image: linear-gradient(#f5d35d66, #f5d35d66);
-}
-
-/* A dot on empty squares the selected piece can move to. */
 .square.legal-target::after {
   content: "";
   position: absolute;
@@ -119,7 +148,6 @@ h1 {
   background: #263a4c70;
 }
 
-/* A ring on enemy pieces the selected piece can capture. */
 .square.capture-target::after {
   content: "";
   position: absolute;
@@ -128,11 +156,9 @@ h1 {
   border-radius: 50%;
 }
 
-/* ---------- Pieces and coordinates ---------- */
-
 .piece {
   z-index: 1;
-  font-size: clamp(25px, 6.3vw, 65px);
+  font-size: clamp(25px, 5.7vw, 65px);
   line-height: 1;
   user-select: none;
 }
@@ -150,7 +176,7 @@ h1 {
 .coordinate {
   position: absolute;
   z-index: 2;
-  font-size: clamp(9px, 1.4vw, 13px);
+  font-size: clamp(9px, 1.2vw, 13px);
   font-weight: bold;
   pointer-events: none;
 }
@@ -158,24 +184,42 @@ h1 {
 .file-coordinate { right: 4px; bottom: 2px; }
 .rank-coordinate { left: 4px; top: 2px; }
 .light .coordinate { color: #795b40; }
-.dark .coordinate  { color: #f3dfc4; }
+.dark .coordinate { color: #f3dfc4; }
 
-/* ---------- Buttons and inputs ---------- */
+/* הכפתורים נערמים בטור צמוד ללוח, כך שלא צריך לגלול אליהם. */
+.board-actions {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
 
 .controls {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 0;
+}
+
+.main-controls,
+.online-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 
 button.action {
-  padding: 10px 13px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 9px;
   background: #29394c;
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 9px;
+  font-size: 14px;
   font-weight: bold;
+  line-height: 1.25;
   cursor: pointer;
 }
 
@@ -191,92 +235,152 @@ button.action:disabled {
 }
 
 input {
-  width: 115px;
-  padding: 9px;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 8px 9px;
   background: #121b27;
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 15px;
 }
 
-/* ---------- Side panel ---------- */
-
-.status {
-  min-height: 45px;
-  margin-bottom: 14px;
-  padding: 12px;
-  background: var(--panel-dark);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  line-height: 1.5;
+#searchDepth {
+  width: 78px;
+  flex: 0 0 78px;
 }
 
-.setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 14px 0;
-}
+.online-tools { min-width: 0; }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.stat {
+.online-info {
+  margin-top: 9px;
   padding: 9px;
   background: var(--panel-dark);
   border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.online-info[hidden] { display: none; }
+
+.online-info .controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 8px;
+}
+
+.online-info input {
+  direction: ltr;
+  text-align: left;
+  font-size: 11px;
+}
+
+/* ---------- מידע, הגדרות ורשימת מהלכים ---------- */
+
+.info-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.status {
+  flex: 0 0 auto;
+  min-height: 40px;
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  background: var(--panel-dark);
+  border: 1px solid var(--line);
   border-radius: 10px;
+  line-height: 1.4;
+  font-size: 14px;
+}
+
+.setting {
+  flex: 0 0 auto;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.stats {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.stat {
+  min-width: 0;
+  padding: 7px 4px;
+  background: var(--panel-dark);
+  border: 1px solid var(--line);
+  border-radius: 9px;
   text-align: center;
 }
 
 .stat span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .stat strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   color: var(--gold);
-  font-size: 18px;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+h3 {
+  flex: 0 0 auto;
+  margin: 5px 0 7px;
+  font-size: 16px;
 }
 
 .moves {
-  max-height: 240px;
-  overflow: auto;
-  padding: 8px;
+  flex: 1 1 auto;
+  min-height: 55px;
+  max-height: none;
+  padding: 6px;
   background: var(--panel-dark);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 9px;
+  overflow: auto;
 }
 
 .move-row {
   display: grid;
-  grid-template-columns: 35px 1fr 1fr;
-  padding: 6px 4px;
+  grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr);
+  padding: 5px 3px;
   border-bottom: 1px solid #293849;
   direction: ltr;
   text-align: left;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.move-number {
-  color: var(--muted);
-}
+.move-number { color: var(--muted); }
 
 details {
-  margin-top: 16px;
-  padding-top: 12px;
+  flex: 0 0 auto;
+  max-height: 105px;
+  margin-top: 8px;
+  padding-top: 7px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  line-height: 1.65;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: auto;
 }
+
+details[open] { max-height: 140px; }
 
 summary {
   color: var(--gold);
@@ -284,38 +388,44 @@ summary {
   cursor: pointer;
 }
 
-/* ---------- Online play ---------- */
+/* ---------- התאמה לחלונות צרים ---------- */
 
-.online-tools input {
-  max-width: 130px;
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 245px; gap: 10px; }
+  .board-panel { grid-template-columns: minmax(0, 1fr) 132px; gap: 9px; padding: 9px; }
+  .board-actions { gap: 10px; }
+  button.action { font-size: 13px; padding-inline: 6px; }
+  .panel { padding: 9px; }
 }
 
-.online-info {
-  margin-top: 10px;
-  padding: 10px;
-  background: var(--panel-dark);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  line-height: 1.5;
+@media (max-height: 650px) and (min-width: 761px) {
+  main { padding-block: 6px; }
+  header { min-height: 36px; margin-bottom: 6px; }
+  h1 { font-size: 23px; }
+  .subtitle { font-size: 12px; }
+  .panel { padding: 8px; }
+  .board-panel { gap: 8px; }
+  .board-actions { gap: 8px; }
+  button.action { min-height: 33px; padding-block: 5px; }
+  .status { min-height: 34px; padding: 6px 8px; }
+  .setting { margin: 5px 0; }
+  .stats { margin: 4px 0 5px; }
+  .stat { padding: 5px 3px; }
+  details { max-height: 75px; margin-top: 5px; }
 }
 
-.online-info[hidden] {
-  display: none;
-}
-
-.online-info input {
-  width: min(100%, 340px);
-  max-width: none;
-  direction: ltr;
-  text-align: left;
-}
-
-/* ---------- Small screens: one column ---------- */
-
-@media (max-width: 800px) {
-  main { padding: 12px; }
-  header { flex-direction: column; align-items: flex-start; }
-  .layout { grid-template-columns: 1fr; }
-  .panel { padding: 12px; }
-  .piece { font-size: clamp(25px, 9vw, 58px); }
+@media (max-width: 760px) {
+  html, body { height: auto; min-height: 100%; overflow: auto; }
+  main { height: auto; min-height: 100dvh; padding: 12px; overflow: visible; }
+  header { align-items: flex-start; flex-direction: column; margin-bottom: 12px; }
+  .layout { grid-template-columns: minmax(0, 1fr); overflow: visible; }
+  .board-panel { grid-template-columns: minmax(0, 1fr); }
+  .board-stage { height: auto; }
+  #board { width: min(100%, calc(100vw - 48px)); max-height: none; }
+  .board-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .main-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .online-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .online-controls input { grid-column: 1 / -1; }
+  .info-panel { overflow: visible; }
+  .moves { flex: none; max-height: 180px; }
 }
