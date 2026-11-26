@@ -1,0 +1,33 @@
+name: SHACH online server tests
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "chess-v31/online-server-tests/**"
+      - ".github/workflows/shach-online-server-tests.yml"
+  pull_request:
+    paths:
+      - "chess-v31/online-server-tests/**"
+      - ".github/workflows/shach-online-server-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  online-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chess-v31/online-server-tests
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-package-lock
+      - name: Run online server integration test
+        run: npm test
